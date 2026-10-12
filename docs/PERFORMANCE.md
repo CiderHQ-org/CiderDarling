@@ -50,8 +50,9 @@ window drawable. AppKit's internal X11 painting context uses interval 0 so an
 occluded window does not hold its UI thread waiting for vblank; application
 contexts keep their own requested policy. Negative adaptive intervals are not
 implemented. Tracing the small background-window fixture exposed approximately
-one-second swap waits before this repair; after it, the measured presentation
-p95 was about 14 ms on this machine. This is a fixture result, not gameplay FPS.
+one-second swap waits. With interval 0 requested and the repaired context policy,
+observed presentation p95 was about 14 ms on this machine. These samples do not
+isolate individual changes or measure gameplay FPS.
 
 ## Private runtime execution and rollback
 
