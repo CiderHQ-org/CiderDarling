@@ -130,6 +130,20 @@ distribution family and the manifest lists those libraries
 
 ### Continuous builds
 
+Successful binary builds also trigger `ciderdarling-updates.yml`. Its publisher
+checks both distribution archives, their manifests and checksums, then writes
+an immutable `ciderdarling-update.json` asset on the binary release and updates
+`runtime-updates/stable.json`. Cider 0.23 checks that feed in the background and
+offers **Update CiderDarling** in the launcher. It installs the exact advertised
+release in a separate terminal; users do not need a manual announcement or a
+new Cider release for each runtime update. Older builds finishing late cannot
+replace a newer channel, and builds preceding the exp10 fix are not promoted.
+
+The publisher runs from the default branch after the binary workflow finishes,
+including builds already in progress when it was added. It uses this
+repository's scoped `GITHUB_TOKEN`; no token shared with the Cider repository
+is needed. Failed or incomplete builds leave the current channel unchanged.
+
 `.github/workflows/ciderdarling-bin.yml` builds every commit on `main` twice,
 in an Arch Linux container (`arch`) and on Ubuntu 24.04 (`ubuntu24.04`, for
 Debian-family hosts with glibc 2.39 or newer), using the scripts in

@@ -1,0 +1,40 @@
+name: Publish CiderDarling update
+
+on:
+  workflow_run:
+    workflows: [CiderDarling binaries]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Published binary revision to promote
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ciderdarling-update-channel
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    steps:
+      # Use the publisher from the default branch, including for builds that
+      # were already running when this workflow was added.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Promote the completed binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ inputs.revision || github.event.workflow_run.head_sha }}
+        run: python3 tools/cider/publish-update.py "$REVISION"
