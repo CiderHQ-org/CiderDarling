@@ -85,6 +85,41 @@ to OFF; enabling it preserves upstream's system-wide shutdown hook, skipped for
 DESTDIR packaging. Private staging keeps this option OFF. Live installation
 remains a separate step.
 
+## Prebuilt binary
+
+Compiling Darling takes a long time and a lot of memory, so a release can be
+packaged once and unpacked elsewhere. On a machine that can build it:
+
+```sh
+python3 tools/cider/package.py            # clean checkout; builds into build-release/, writes dist/
+```
+
+This produces `ciderdarling-<revision>-x86_64.tar.xz`, its `.sha256`, and a
+`.json` manifest recording the revision, patch-series hash, archive hash, and
+the host requirements measured from the ELF files (minimum glibc and
+libstdc++). The archive holds the install tree for `/opt/ciderdarling/<revision>`
+with root ownership and the setuid `bin/darling`. The script refuses a dirty
+tree, a build configured for another prefix, or a build that does not match the
+checkout, and it installs and uploads nothing.
+
+On the target machine, keep the three files together and run:
+
+```sh
+python3 tools/cider/install-binary.py ciderdarling-<revision>-x86_64.tar.xz
+```
+
+The installer checks the SHA-256, architecture, glibc and libstdc++ against the
+manifest before writing anything, unpacks with sudo into a hidden directory,
+verifies ownership, the setuid bit and `runtime.json`, then renames it into
+place. It never overwrites an existing version directory. If the host is too
+old for the archive, build from source instead.
+
+The binary is dynamically linked against the build host's glibc and libstdc++,
+so it runs on hosts at least as new as the manifest's `min_glibc`; build on an
+older distribution to widen that range. The Darling client still needs the
+host kernel features and graphics libraries that a source build needs at run
+time, and the pinned revision must be published before launchers can fetch it.
+
 ## Host diagnostics
 
 ```sh

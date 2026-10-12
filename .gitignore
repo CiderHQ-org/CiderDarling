@@ -34,6 +34,8 @@ tests
 
 # The suggested build folder
 build
+build-release
+dist
 
 rpm/SOURCES
 rpm/RPMS
