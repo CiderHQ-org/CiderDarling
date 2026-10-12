@@ -1,6 +1,7 @@
 # CiderDarling
 
-CiderDarling is the x86_64 Darling fork for [Cider](https://github.com/aubree-lat/MacOBlox), maintained for [CiderHQ-org/CiderDarling](https://github.com/CiderHQ-org/CiderDarling).
+CiderDarling is a Darling-based x86_64 runtime for [Cider](https://github.com/aubree-lat/MacOBlox), maintained by [CiderHQ](https://github.com/CiderHQ-org).
+It is hosted as an independent repository at [CiderHQ-org/CiderDarling](https://github.com/CiderHQ-org/CiderDarling).
 It repairs runtime compatibility in source while retaining Darling's upstream frameworks and licenses.
 
 The current source series covers socket and kqueue correctness, thread stacks,

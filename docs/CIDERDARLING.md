@@ -2,7 +2,7 @@
 
 Target repository: https://github.com/CiderHQ-org/CiderDarling
 
-This fork targets x86_64 Linux hosts running the x86_64 macOS Roblox client
+This project targets x86_64 Linux hosts running the x86_64 macOS Roblox client
 through Cider. ARM support is outside this workstream. Hardware support labels
 require results from real machines; successfully compiling a backend does not
 establish gameplay compatibility.
