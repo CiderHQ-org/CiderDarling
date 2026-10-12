@@ -1,0 +1,19 @@
+--- a/src/external/cocotron/AppKit/include/AppKit/NSDisplay.h
++++ b/src/external/cocotron/AppKit/include/AppKit/NSDisplay.h
+@@ -22,12 +22,16 @@
+ #import <AppKit/NSPasteboard.h>
+ #import <CarbonCore/UnicodeUtilities.h>
+ #import <Foundation/Foundation.h>
++#import <CoreFoundation/CFRunLoop.h>
+ 
+ @class NSColor, NSDraggingManager, NSPrintInfo, NSView, NSSavePanel,
+         NSOpenPanel, NSFontTypeface, CGWindow;
+ 
+ @interface NSDisplay : NSObject {
+     NSMutableArray *_eventQueue;
++    NSRecursiveLock *_eventQueueLock;
++    CFRunLoopRef _eventRunLoop;
++    CFRunLoopSourceRef _eventWakeSource;
+ }
+ 
+ + (NSDisplay *) currentDisplay;

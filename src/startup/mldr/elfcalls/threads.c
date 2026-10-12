@@ -32,6 +32,8 @@ along with Darling.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/socket.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <stdint.h>
 
 #include "dthreads.h"
 
@@ -76,6 +78,9 @@ static void* darling_thread_entry(void* p);
 #endif
 
 #define DEFAULT_DTHREAD_GUARD_SIZE 0x1000
+#ifndef CIDER_DEFAULT_THREAD_STACK_SIZE
+#define CIDER_DEFAULT_THREAD_STACK_SIZE (8UL * 1024 * 1024)
+#endif
 
 static inline void *align_16(uintptr_t ptr) {
 	return (void *) ((uintptr_t) ptr & ~(uintptr_t) 15);
@@ -114,13 +119,25 @@ static dthread_t dthread_structure_init(dthread_t dthread, size_t guard_size, vo
 };
 
 static dthread_t dthread_structure_allocate(size_t stack_size, size_t guard_size, void** stack_addr) {
+	if (stack_size > SIZE_MAX - guard_size ||
+		stack_size + guard_size > SIZE_MAX - sizeof(struct _dthread)) {
+		errno = ENOMEM;
+		return NULL;
+	}
 	size_t total_size = guard_size + stack_size + sizeof(struct _dthread);
 
 	// allocate our stack, guard page, and dthread structure
 	void* base_addr = mmap(NULL, total_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (base_addr == MAP_FAILED)
+		return NULL;
 
 	// protect our guard page
-	mprotect(base_addr, guard_size, PROT_NONE);
+	if (mprotect(base_addr, guard_size, PROT_NONE) != 0) {
+		int saved = errno;
+		munmap(base_addr, total_size);
+		errno = saved;
+		return NULL;
+	}
 
 	/**
 	 * memory layout of newly allocated block:
@@ -163,7 +180,8 @@ void* __darling_thread_create(unsigned long stack_size, unsigned long pth_obj_si
 	pthread_attr_t attr;
 	pthread_t nativeLibcThread;
 
-	pthread_attr_init(&attr);
+	if (pthread_attr_init(&attr) != 0)
+		return (void*)(intptr_t)-22; // Darwin EINVAL
 	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	// pthread_attr_setstacksize(&attr, stack_size);
 
@@ -171,8 +189,17 @@ void* __darling_thread_create(unsigned long stack_size, unsigned long pth_obj_si
 	// in those cases, just use what we're given (it also contains more information)
 	//
 	// otherwise, allocate them ourselves
-	if (pth == NULL || args.is_workqueue) {
+	bool allocated_stack = pth == NULL || args.is_workqueue;
+	if (allocated_stack) {
+		// Host graphics drivers run on this stack too. Never alter a
+		// caller-owned pthread stack or its requested attributes.
+		if (stack_size < CIDER_DEFAULT_THREAD_STACK_SIZE)
+			stack_size = CIDER_DEFAULT_THREAD_STACK_SIZE;
 		pth = dthread_structure_allocate(stack_size, DEFAULT_DTHREAD_GUARD_SIZE, (void**)&args.stack_addr);
+		if (pth == NULL) {
+			pthread_attr_destroy(&attr);
+			return (void*)(intptr_t)-12; // Darwin ENOMEM
+		}
 	} else if (!args.is_workqueue) {
 		// `arg2` is `stack_addr` for normal threads
 		args.stack_addr = arg2;
@@ -188,15 +215,27 @@ void* __darling_thread_create(unsigned long stack_size, unsigned long pth_obj_si
 
 	// std::cout << "Allocated stack at " << pth << ", size " << stack_size << std::endl;
 
-	pthread_attr_setstacksize(&attr, 4096);
+	// 4096 is below Linux PTHREAD_STACK_MIN and silently kept the default
+	// stack. This stack only bootstraps/checks in and handles thread exit.
+	size_t native_stack_size = PTHREAD_STACK_MIN > 65536 ? PTHREAD_STACK_MIN : 65536;
+	pthread_attr_setstacksize(&attr, native_stack_size);
 
 	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
 	args.pth = pth;
-	pthread_create(&nativeLibcThread, &attr, darling_thread_entry, &args);
+	int create_error = pthread_create(&nativeLibcThread, &attr, darling_thread_entry, &args);
 	pthread_attr_destroy(&attr);
+	if (create_error != 0) {
+		if (allocated_stack) {
+			dthread_t dthread = pth;
+			munmap(dthread->freeaddr, dthread->freesize);
+		}
+		// Do not wait forever for a child that was never created.
+		return (void*)(intptr_t)(create_error == EAGAIN ? -35 :
+			create_error == ENOMEM ? -12 : -22);
+	}
 
-	while (args.pth != NULL)
+	while (__atomic_load_n(&args.pth, __ATOMIC_ACQUIRE) != NULL)
 		sched_yield();
 
 	return pth;
@@ -244,7 +283,7 @@ static void* darling_thread_entry(void* p)
 	dthread->tsd[DTHREAD_TSD_SLOT_MACH_THREAD_SELF] = (void*)(intptr_t)thread_self_port;
 	args.port = thread_self_port;
 
-	in_args->pth = NULL;
+	__atomic_store_n(&in_args->pth, NULL, __ATOMIC_RELEASE);
 
 	if (setjmp(t_jmpbuf))
 	{

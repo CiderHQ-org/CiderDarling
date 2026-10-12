@@ -1,0 +1,21 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/bsd_syscall_table.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/bsd_syscall_table.c
+@@ -60,6 +60,7 @@
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/accept.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/bind.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/connect.h>
++#include <darling/emulation/xnu_syscall/bsd/impl/network/connectx.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/getpeername.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/getsockname.h>
+ #include <darling/emulation/xnu_syscall/bsd/impl/network/getsockopt.h>
+@@ -481,8 +482,10 @@
+ 	[478] = sys_bsdthread_ctl,
+ 	[483] = sys_csrctl,
+ 	[500] = sys_getentropy,
++	[447] = sys_connectx,
+ 	[515] = sys_ulock_wait,
+ 	[516] = sys_ulock_wake,
++	[544] = sys_ulock_wait2,
+ 	[517] = sys_fclonefileat,
+ 	[521] = sys_abort_with_payload,
+ 	[524] = sys_setattrlistat,

@@ -1,0 +1,20 @@
+--- a/src/external/security/trust/trustd/SecPinningDb.m
++++ b/src/external/security/trust/trustd/SecPinningDb.m
+@@ -582,7 +582,7 @@
+                 /* Check the no-pinning settings to determine whether to use the rules */
+                 NSString *policyName = resultDictionary[(__bridge NSString *)kSecPinningDbKeyPolicyName];
+                 if ([self isPinningDisabled:policyName]) {
+-                    *results = @{ (__bridge NSString*)kSecPinningDbKeyRules:@[@{}],
++                    *results = @{ (__bridge NSString*)kSecPinningDbKeyRules:@[[NSDictionary dictionary]],
+                                   (__bridge NSString*)kSecPinningDbKeyPolicyName:policyName};
+                 } else {
+                     *results = resultDictionary;
+@@ -735,7 +735,7 @@
+          * a policy name so that requirements that don't apply to pinned domains continue to not
+          * apply. */
+         if ([self isPinningDisabled:resultName]) {
+-            return @{ (__bridge NSString*)kSecPinningDbKeyRules:@[@{}],
++            return @{ (__bridge NSString*)kSecPinningDbKeyRules:@[[NSDictionary dictionary]],
+                       (__bridge NSString*)kSecPinningDbKeyPolicyName:resultName};
+         }
+ 

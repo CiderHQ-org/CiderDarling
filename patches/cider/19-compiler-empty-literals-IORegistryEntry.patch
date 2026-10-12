@@ -1,0 +1,11 @@
+--- a/src/external/iokitd/src/IORegistryEntry.mm
++++ b/src/external/iokitd/src/IORegistryEntry.mm
+@@ -45,7 +45,7 @@
+ 
+ NSDictionary* IORegistryEntry::getProperties()
+ {
+-	return @{};
++	return [NSDictionary dictionary];
+ }
+ 
+ const char* IORegistryEntry::className() const

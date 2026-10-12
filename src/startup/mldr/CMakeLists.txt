@@ -26,6 +26,7 @@ set(mldr_sources
 add_executable(mldr ${mldr_sources})
 
 target_compile_options(mldr PRIVATE -pthread)
+target_compile_definitions(mldr PRIVATE CIDER_DEFAULT_THREAD_STACK_SIZE=${CIDER_THREAD_STACK_BYTES}UL)
 target_link_options(mldr PRIVATE -pthread)
 
 target_link_libraries(mldr PRIVATE -lrt -ldl mldr_dserver_rpc -lm)

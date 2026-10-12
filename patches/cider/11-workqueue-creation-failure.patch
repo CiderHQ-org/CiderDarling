@@ -1,0 +1,24 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c
+@@ -286,16 +286,15 @@
+ 				// __simple_printf("Spawning a new thread, nevents=%d\n", (wq_event != NULL) ? wq_event->nevents : -1);
+ 				wq_event_pending = wq_event;
+ 
+-				__darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
++				void *created = __darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
+ 						(wq_event != NULL) ? wq_event->events : NULL, flags,
+ 						(wq_event != NULL) ? wq_event->nevents : 0,
+ 						&callbacks, NULL);
+ 
+-				/*if (ret < 0)
+-				{
+-					__simple_printf("Failed to spawn a new thread, err %d\n", -ret);
+-					return ret;
+-				}*/
++				if ((intptr_t)created < 0 && (intptr_t)created >= -4095) {
++                    sem_up(&workq_sem);
++                    return (intptr_t)created;
++                }
+ 			}
+ 			return 0;
+ 		}

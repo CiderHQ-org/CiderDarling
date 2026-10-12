@@ -67,6 +67,10 @@ static inline int attribute_has_argument(CGLPixelFormatAttribute attr) {
     case kCGLPFADepthSize:
     case kCGLPFAStencilSize:
     case kCGLPFAAccumSize:
+    case kCGLPFASampleBuffers:
+    case kCGLPFASamples:
+    case kCGLPFAOpenGLProfile:
+    case kCGLPFAVirtualScreenCount:
     case kCGLPFARendererID:
     case kCGLPFADisplayMask:
         return 1;
@@ -177,8 +181,12 @@ CGL_EXPORT void CGLDestroyWindow(CGLWindowRef window) {
 CGL_EXPORT CGLError CGLContextMakeCurrentAndAttachToWindow(CGLContextObj context, CGLWindowRef window) {
     if (!context)
         return kCGLBadContext;
+    EGLSurface previous = context->egl_surface;
     context->egl_surface = (EGLSurface) window;
-    return CGLSetCurrentContext(context);
+    CGLError error = CGLSetCurrentContext(context);
+    if (error != kCGLNoError)
+        context->egl_surface = previous;
+    return error;
 }
 
 static pthread_key_t current_context_key;
@@ -200,16 +208,24 @@ CGLContextObj CGLGetCurrentContext(void) {
 
 CGLError CGLSetCurrentContext(CGLContextObj context) {
     pthread_key_t key = get_current_context_key();
-    pthread_setspecific(key, context);
+    // EGL's current API is thread-local and initially defaults to GLES.
+    if (!eglBindAPI(EGL_OPENGL_API))
+        return kCGLBadContext;
 
     if (context != NULL) {
         EGLSurface surface = context->egl_surface;
-        eglMakeCurrent(display, surface, surface, context->egl_context);
+        if (!eglMakeCurrent(display, surface, surface, context->egl_context))
+            return kCGLBadContext;
     } else {
-        eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        if (!eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT))
+            return kCGLBadContext;
     }
 
-    return kCGLNoError; // FIXME
+    // Publish only a context actually accepted by the host driver.
+    // A failed switch must leave CGLGetCurrentContext consistent with EGL.
+    if (pthread_setspecific(key, context) != 0)
+        return kCGLBadAlloc;
+    return kCGLNoError;
 }
 
 CGLError CGLSetFullScreen(CGLContextObj ctx) {
@@ -223,11 +239,22 @@ CGLError CGLChoosePixelFormat(
     CGLPixelFormatObj *result,
     GLint *number_of_screens
 ) {
+    if (!result || !number_of_screens)
+        return kCGLBadAddress;
+    *result = NULL;
+    *number_of_screens = 0;
+    CGLPixelFormatAttribute empty[] = {0};
+    if (!attrs) attrs = empty;
     CGLPixelFormatObj format = malloc(sizeof(struct _CGLPixelFormatObj));
+    if (!format) return kCGLBadAlloc;
     int count = attributes_count(attrs);
 
     format->retain_count = 1;
-    format->attributes = malloc(sizeof(CGLPixelFormatAttribute) * count);
+    format->attributes = calloc((size_t)count + 1, sizeof(CGLPixelFormatAttribute));
+    if (!format->attributes) {
+        free(format);
+        return kCGLBadAlloc;
+    }
     for (int i = 0; i < count; i++) {
         format->attributes[i] = attrs[i];
     }
@@ -304,21 +331,54 @@ GLuint CGLGetPixelFormatRetainCount(CGLPixelFormatObj pixelFormat) {
 }
 
 CGLError CGLCreateContext(CGLPixelFormatObj pixelFormat, CGLContextObj share, CGLContextObj *resultp) {
+    if (!resultp)
+        return kCGLBadAddress;
+    *resultp = NULL;
+    if (!pixelFormat)
+        return kCGLBadPixelFormat;
+    if (!eglBindAPI(EGL_OPENGL_API))
+        return kCGLBadContext;
 
     EGLContext egl_share = EGL_NO_CONTEXT;
     if (share != NULL) {
         egl_share = share->egl_context;
     }
-    EGLContext egl_context = eglCreateContext(display, config, egl_share, NULL);
+    GLint profile = 0;
+    CGLDescribePixelFormat(pixelFormat, 0, kCGLPFAOpenGLProfile, &profile);
+    EGLContext egl_context = EGL_NO_CONTEXT;
+    if (profile == kCGLOGLPVersion_3_2_Core || profile == kCGLOGLPVersion_4_1_Core) {
+        // Try the profile commonly supplied by macOS first, then honor the
+        // requested minimum without silently selecting legacy OpenGL.
+        EGLint core[] = {EGL_CONTEXT_MAJOR_VERSION, 4, EGL_CONTEXT_MINOR_VERSION, 1,
+            EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT, EGL_NONE};
+        egl_context = eglCreateContext(display, config, egl_share, core);
+        if (egl_context == EGL_NO_CONTEXT && profile == kCGLOGLPVersion_3_2_Core) {
+            core[1] = 3;
+            core[3] = 2;
+            egl_context = eglCreateContext(display, config, egl_share, core);
+        }
+    } else if (profile == 0 || profile == kCGLOGLPVersion_Legacy) {
+        egl_context = eglCreateContext(display, config, egl_share, NULL);
+    } else {
+        return kCGLBadValue;
+    }
 
     if (egl_context == EGL_NO_CONTEXT) {
         return kCGLBadContext;
     }
 
     CGLContextObj context = malloc(sizeof(struct _CGLContextObj));
+    if (!context) {
+        eglDestroyContext(display, egl_context);
+        return kCGLBadAlloc;
+    }
 
     context->retain_count = 1;
-    pthread_mutex_init(&(context->lock), NULL);
+    if (pthread_mutex_init(&(context->lock), NULL) != 0) {
+        free(context);
+        eglDestroyContext(display, egl_context);
+        return kCGLBadAlloc;
+    }
     context->egl_context = egl_context;
     context->egl_surface = NULL;
     context->swap_interval = 1;

@@ -1,0 +1,12 @@
+--- a/src/external/libplatform/CMakeLists.txt
++++ b/src/external/libplatform/CMakeLists.txt
+@@ -101,6 +101,9 @@
+ 	src/ucontext/generic/swapcontext.c
+ )
+ 
++file(GLOB cider_string_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/string/generic/*.c")
++set_source_files_properties(${cider_string_sources} PROPERTIES COMPILE_OPTIONS "-O2;-fno-builtin")
++
+ set(DYLIB_INSTALL_NAME "/usr/lib/system/libsystem_platform.dylib")
+ add_circular(platform FAT
+ 	SOURCES ${platform_sources}

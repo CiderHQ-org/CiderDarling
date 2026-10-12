@@ -1,0 +1,28 @@
+name: Cider source regressions
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  source-fixtures:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch dependencies needed by the fixtures
+        run: |
+          git submodule update --init --depth 1 src/external/libkqueue src/external/xnu src/external/cocotron src/external/libpthread src/external/libplatform src/external/metal src/external/objc4 src/external/cfnetwork src/external/iokitd src/external/security src/external/libunwind
+          git submodule update --init --depth 1 src/external/metal
+          git -C src/external/metal submodule update --init --depth 1 deps/indium
+      - name: Install host fixture dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang gcc python3 libegl1-mesa-dev libgl-dev
+      - name: Prepare and validate actual sources
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          python3 tools/cider/prepare.py
+          python3 validation/run.py
+      - name: Build the host graphics diagnostic
+        run: ${{ matrix.compiler }} -O2 -Wall -Wextra -pthread tools/cider/graphics-probe.c -lEGL -lGL -o /tmp/cider-gl-probe

@@ -1,3 +1,32 @@
+# CiderDarling
+
+CiderDarling is the x86_64 Darling fork for [Cider](https://github.com/aubree-lat/MacOBlox), maintained for [CiderHQ-org/CiderDarling](https://github.com/CiderHQ-org/CiderDarling).
+It repairs runtime compatibility in source while retaining Darling's upstream frameworks and licenses.
+
+The current source series covers socket and kqueue correctness, thread stacks,
+ulock waits, AppKit events, OpenGL context/profile handling, display dimensions,
+portable string optimization, and modern compiler compatibility. Metal is an
+experimental opt-in; the default build uses the existing OpenGL path.
+
+See [the CiderDarling build, validation, and hardware roadmap](docs/CIDERDARLING.md).
+
+```sh
+git clone https://github.com/CiderHQ-org/CiderDarling.git
+cd CiderDarling
+python3 tools/cider/bootstrap.py
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_METAL=OFF
+cmake --build build --parallel 4
+python3 validation/run.py
+python3 tools/cider/doctor.py --json --graphics
+```
+
+Bootstrapping downloads pinned dependencies and applies hash-verified source
+patches. These commands build and test inside the checkout; installation is a
+separate action. Distribution build dependencies remain documented in the
+[upstream build guide](https://docs.darlinghq.org/build-instructions.html).
+
+## Darling upstream
+
 <p align=center>
   <a href="https://darlinghq.org/">
     <img alt="Darling logo" src="https://darlinghq.org/img/darling250.png">

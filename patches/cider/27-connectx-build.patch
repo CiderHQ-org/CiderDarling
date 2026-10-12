@@ -1,0 +1,10 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/CMakeLists.txt
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/CMakeLists.txt
+@@ -169,6 +169,7 @@
+ 	src/xnu_syscall/bsd/impl/network/accept.c
+ 	src/xnu_syscall/bsd/impl/network/bind.c
+ 	src/xnu_syscall/bsd/impl/network/connect.c
++	src/xnu_syscall/bsd/impl/network/connectx.c
+ 	src/xnu_syscall/bsd/impl/network/getpeername.c
+ 	src/xnu_syscall/bsd/impl/network/getsockname.c
+ 	src/xnu_syscall/bsd/impl/network/getsockopt.c

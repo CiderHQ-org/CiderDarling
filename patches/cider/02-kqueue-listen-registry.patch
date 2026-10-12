@@ -1,0 +1,30 @@
+--- a/src/external/libkqueue/src/darling/listenregistry.c
++++ b/src/external/libkqueue/src/darling/listenregistry.c
+@@ -32,12 +32,12 @@
+     pthread_mutex_lock(&registry_mtx);
+ 
+     if (registry_vector == NULL) {
+-        registry_vector = malloc(REGISTRY_VECTOR_INITIAL_CAPACITY);
++        registry_vector = malloc(REGISTRY_VECTOR_INITIAL_CAPACITY * sizeof(*registry_vector));
+         if (registry_vector == NULL)
+             goto quit;
+         registry_vector_capacity = REGISTRY_VECTOR_INITIAL_CAPACITY;
+     } else if (registry_vector_size == registry_vector_capacity) {
+-        int* newPtr = realloc(registry_vector, registry_vector_capacity * 2);
++        int* newPtr = realloc(registry_vector, registry_vector_capacity * 2 * sizeof(*registry_vector));
+         if (newPtr == NULL)
+             goto quit;
+         registry_vector = newPtr;
+@@ -61,9 +61,10 @@
+     pthread_mutex_lock(&registry_mtx);
+ 
+     for (size_t i = 0; i < registry_vector_size; ++i) {
+-        while (registry_vector[i] == fd) {
++        if (registry_vector[i] == fd) {
++            --registry_vector_size;
+             registry_vector[i] = registry_vector[registry_vector_size];
+-            --registry_vector_size;
++            break; /* registration rejects duplicates */
+         }
+     }
+ 

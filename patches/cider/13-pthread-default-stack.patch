@@ -1,0 +1,14 @@
+--- a/src/external/libpthread/src/pthread.c
++++ b/src/external/libpthread/src/pthread.c
+@@ -80,7 +80,10 @@
+ #endif // _PTHREAD_CONFIG_JIT_WRITE_PROTECT
+ 
+ // Default stack size is 512KB; independent of the main thread's stack size.
+-#define DEFAULT_STACK_SIZE (size_t)(512 * 1024)
++#ifndef CIDER_DEFAULT_THREAD_STACK_SIZE
++#define CIDER_DEFAULT_THREAD_STACK_SIZE (8UL * 1024 * 1024)
++#endif
++#define DEFAULT_STACK_SIZE (size_t)CIDER_DEFAULT_THREAD_STACK_SIZE
+ 
+ //
+ // Global constants

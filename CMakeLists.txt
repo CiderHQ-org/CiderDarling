@@ -67,6 +67,39 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "The version of macOS we're si
 
 project(darling)
 
+option(CIDER_APPLY_PATCHES "Apply the pinned CiderDarling dependency patch series" ON)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/patches/cider/series.json"
+    "${CMAKE_SOURCE_DIR}/tools/cider/prepare.py")
+if(CIDER_APPLY_PATCHES)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/cider/prepare.py"
+        RESULT_VARIABLE CIDER_PATCH_RESULT
+    )
+    if(NOT CIDER_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "Cider source preparation failed. Initialize pinned submodules; see tools/cider/prepare.py --check.")
+    endif()
+endif()
+
+# New Clang literal classes are not implemented by Darling's Foundation.
+# Probe flags so the same source remains buildable with older compilers.
+foreach(CIDER_LANGUAGE C CXX)
+    execute_process(COMMAND "${CMAKE_${CIDER_LANGUAGE}_COMPILER}" -cc1 -help
+        OUTPUT_VARIABLE CIDER_COMPILER_HELP ERROR_QUIET)
+    foreach(CIDER_FAMILY nsnumber nsarray nsdictionary)
+        if(CIDER_COMPILER_HELP MATCHES "-fconstant-${CIDER_FAMILY}-literals")
+            string(APPEND CMAKE_${CIDER_LANGUAGE}_FLAGS " -fno-constant-${CIDER_FAMILY}-literals")
+        endif()
+    endforeach()
+endforeach()
+
+set(CIDER_THREAD_STACK_KB 8192 CACHE STRING "Minimum loader-owned Darwin thread stack in KiB")
+if(NOT CIDER_THREAD_STACK_KB MATCHES "^[0-9]+$" OR CIDER_THREAD_STACK_KB LESS 512 OR CIDER_THREAD_STACK_KB GREATER 65536)
+    message(FATAL_ERROR "CIDER_THREAD_STACK_KB must be between 512 and 65536")
+endif()
+math(EXPR CIDER_THREAD_STACK_BYTES "${CIDER_THREAD_STACK_KB} * 1024")
+
 enable_language(ASM)
 
 set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME "core")
@@ -131,7 +164,7 @@ endif(CMAKE_POSITION_INDEPENDENT_CODE)
 
 enable_language(ASM-ATT)
 
-option(TARGET_i386 "Enable i386 slices" ON)
+option(TARGET_i386 "Enable i386 slices" OFF)
 option(TARGET_x86_64 "Enable x86_64 slices" ON)
 option(DEBIAN_PACKAGING "Packaging for Debian" OFF)
 option(ENABLE_TESTS "Install in-prefix unit tests" OFF)
@@ -168,7 +201,7 @@ if (COMPILE_PY2_BYTECODE)
 	find_package(Python2 REQUIRED COMPONENTS Interpreter)
 endif (COMPILE_PY2_BYTECODE)
 
-set(ENABLE_METAL AUTO CACHE STRING "Build Darling with Metal support")
+set(ENABLE_METAL OFF CACHE STRING "Build experimental Metal support")
 set_property(CACHE ENABLE_METAL PROPERTY STRINGS AUTO ON OFF)
 
 string(TOLOWER "${ENABLE_METAL}" BUILD_METAL)
@@ -196,6 +229,19 @@ cmake_policy(SET CMP0014 NEW)
 generate_architecture()
 
 add_subdirectory(src)
+add_subdirectory(tools/cider)
+
+if(CIDER_APPLY_PATCHES)
+    execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE CIDER_SOURCE_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(NOT CIDER_SOURCE_REVISION)
+        set(CIDER_SOURCE_REVISION "source-archive")
+    endif()
+    file(SHA256 "${CMAKE_SOURCE_DIR}/patches/cider/series.json" CIDER_SERIES_SHA256)
+    configure_file(tools/cider/runtime.json.in cider-runtime.json @ONLY)
+    install(FILES "${CMAKE_BINARY_DIR}/cider-runtime.json"
+        DESTINATION libexec/darling/usr/share/ciderdarling RENAME runtime.json)
+endif()
 
 install(DIRECTORY DESTINATION libexec/darling/private)
 install(DIRECTORY DESTINATION libexec/darling/private/etc)

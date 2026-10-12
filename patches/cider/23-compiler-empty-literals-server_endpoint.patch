@@ -1,0 +1,11 @@
+--- a/src/external/security/OSX/sec/ipc/server_endpoint.m
++++ b/src/external/security/OSX/sec/ipc/server_endpoint.m
+@@ -174,7 +174,7 @@
+     SecurityClient* client = SecSecurityClientGet();
+ 
+     // We know that SecuritydXPCServerListener will comply with SecuritydXPCProtocol via category, so help the compiler out
+-    return (id<SecuritydXPCProtocol>) [[LocalSecuritydXPCServer alloc] initWithSecurityClient: client fakeEntitlements: @{}];
++    return (id<SecuritydXPCProtocol>) [[LocalSecuritydXPCServer alloc] initWithSecurityClient: client fakeEntitlements: [NSDictionary dictionary]];
+ }
+ 
+ CFTypeRef SecCreateLocalCFSecuritydXPCServer(void) {

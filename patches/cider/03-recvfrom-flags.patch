@@ -1,0 +1,14 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/recvfrom.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/recvfrom.c
+@@ -29,9 +29,9 @@
+ 
+ #ifdef __NR_socketcall
+ 	ret = LINUX_SYSCALL(__NR_socketcall, LINUX_SYS_RECVFROM, ((long[6]) { fd, buf, len,
+-			flags, from, socklen }));
++			linux_flags, from, socklen }));
+ #else
+-	ret = LINUX_SYSCALL(__NR_recvfrom, fd, buf, len, flags, from, socklen);
++	ret = LINUX_SYSCALL(__NR_recvfrom, fd, buf, len, linux_flags, from, socklen);
+ #endif
+ 
+ 	if (ret < 0)

@@ -1,0 +1,25 @@
+--- a/src/external/cocotron/QuartzCore/CALayerContext.m
++++ b/src/external/cocotron/QuartzCore/CALayerContext.m
+@@ -94,8 +94,10 @@
+ }
+ 
+ - (void) renderLayer: (CALayer *) layer {
+-    CGLContextMakeCurrentAndAttachToWindow(_glContext, _cglWindow);
+-
++    CGLContextObj previous = CGLGetCurrentContext();
++    if (CGLContextMakeCurrentAndAttachToWindow(_glContext, _cglWindow) != kCGLNoError)
++        return;
++    @try {
+     glEnable(GL_DEPTH_TEST);
+     glShadeModel(GL_SMOOTH);
+ 
+@@ -127,6 +129,9 @@
+     }
+ 
+     [_renderer render];
++    } @finally {
++        CGLSetCurrentContext(previous);
++    }
+ }
+ 
+ - (void) render {

@@ -1,0 +1,11 @@
+--- a/src/external/metal/src/Metal/MTLCommandBuffer.mm
++++ b/src/external/metal/src/Metal/MTLCommandBuffer.mm
+@@ -65,7 +65,7 @@
+ 	if (self != nil) {
+ 		_commandBuffer = commandBuffer;
+ 		_device = [commandQueue.device retain];
+-		_commandQueue = [_commandQueue retain];
++		_commandQueue = [commandQueue retain];
+ 	}
+ 	return self;
+ }

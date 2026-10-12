@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "upstream": "60ba801de",
+  "files": [
+    {
+      "path": "src/external/libkqueue/src/common/map.c",
+      "before": "50d73d9c077caec8fa6c43ef666bcf823a0d0c8fe31a6aac2c1aa6747c262a8f",
+      "after": "cb3936ba8e7dcaba9cc8bd533db3450b46d7192b9caf86767d98818eb62b90d6",
+      "patch": "01-kqueue-sparse-map.patch",
+      "patch_sha256": "ea9a574dd81805b001374122fecdb1318bc00af71ce956d78f544e3c6437ade7"
+    },
+    {
+      "path": "src/external/libkqueue/src/darling/listenregistry.c",
+      "before": "b08d25537b8ad00455f64775744bc925bd1d5af314b29ea272a474fcd112b03a",
+      "after": "f21b2f9d682316c30a7c15740c04a73051bef5cd82386aa72440a02cd71c97a6",
+      "patch": "02-kqueue-listen-registry.patch",
+      "patch_sha256": "5a71f839f0dcbbddcb224b53ec9eac7d802604b1f04ad85f9001bc27c4ae8342"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/recvfrom.c",
+      "before": "979f747a171aff876f22f062b34d0789c4708ce875be6819d6b7eb7da5f80880",
+      "after": "3cee0a460d0af977ffc51f4823c213f5e00bde25c09c58a8ddfe741ce96801e6",
+      "patch": "03-recvfrom-flags.patch",
+      "patch_sha256": "3df15c61d82b03e6614d438f0a03e304bba8a603e51f0ae6f8ac95191dc58231"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/ulock_wake.c",
+      "before": "b3a595a0b5f5ec96aeb7ffab8d8413d326e7e78657a3b65d18a2baf5551dcf68",
+      "after": "a5ceb376dd8a9a0a1f3bdb89555002eb2d65e958e38f643f26a326a834d63a4a",
+      "patch": "04-ulock_wake-errors.patch",
+      "patch_sha256": "b56d7615a7269e80551353240cbdab2d856cf2f8f77039fe50d752285b362f29"
+    },
+    {
+      "path": "src/external/xnu/libsyscall/custom/SYS.h",
+      "before": "cca1849f29f021b06f453871603d30b093fc55f0355395569826e799451e882d",
+      "after": "71516327c6a9a9703bf99046c71d582ec8aa7b844c6c0ea988eb491bb4933daf",
+      "patch": "05-ulock-exported-abi.patch",
+      "patch_sha256": "90723e8aa33f0f2925572dd051fd41835b1761a962be9967af3a862f93c4626c"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/ulock_wait.c",
+      "before": "37a3f12902f94ce1b0be52a908d7a1c6102bd9955312b43d7b186a814a2813a3",
+      "after": "0ecfa7155e79d60e642728a0e24fa7ec12bbfaa19ea6d4368a43c5926c70ae8d",
+      "patch": "06-ulock-wait2.patch",
+      "patch_sha256": "a0e8af77754672894ae539fe7212b65238b9cc4516beff96e5604966370b9380"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/psynch/ulock_wait.h",
+      "before": "8c7a8d5f172b078c2247599c085da33b41178474d219ddbd408d6cf3db3ec74b",
+      "after": "e9747736d21111d8a9107b8a366f95d89eca977137a1f538d9c9975aec6a4363",
+      "patch": "07-ulock-wait2-header.patch",
+      "patch_sha256": "02c1504714f5b0e9f2cd4dd987191ad5ebe8f4af094d0d41df3d94ff38f9d820"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/bsd_syscall_table.c",
+      "before": "c0faf9ce6fbee7db9af45c60500a5be3a4dd0c718a7b375aee980010032e8a0c",
+      "after": "1e2e557487110d477924c48aa7ccbfeb7c6ba9652e19e7bb05a1b3d28c505ffb",
+      "patch": "08-ulock-wait2-dispatch.patch",
+      "patch_sha256": "28819a2c17ddbb04d01d9e0db3be6b679ddff62cbf87cbd89eac5d3baab68280"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/bsdthread_register.c",
+      "before": "dd6059651c9d7544e1df1d4054defaa7c75aef38907d6165877485ce41b9a355",
+      "after": "3e9708bdd292095c6cec6789a0049ee670e5e2a0ca8421ece909694cb4b2e71c",
+      "patch": "09-workqueue-stack-reset.patch",
+      "patch_sha256": "4b84a2756d21a058f97581ed076d680e7a95016541a9023404249cdb792021d5"
+    },
+    {
+      "path": "src/external/cocotron/CoreGraphics/CGDirectDisplay.m",
+      "before": "910d1de2cb29b625600e62ae4d8e2acc0ae5c9af9e7a1bf59f3c4398cf90bceb",
+      "after": "0745b981494615e1cfd15e85439222b428aa68f98512488ef7022fee0769d88b",
+      "patch": "10-display-physical-size.patch",
+      "patch_sha256": "8700b0085c62fd5015dd5bb3c31c3ebbfabbe145ce9ba069712f86e500fe49c2"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c",
+      "before": "74487ac3d2e8bea8e5dda84d71518afda5da1e01d1add5e8b3cbb23b12c6e324",
+      "patch": "11-workqueue-creation-failure.patch",
+      "after": "3f726c69ee1377beb34aec4552fbeda327bf2779978756cad8a6ae97349a256f",
+      "patch_sha256": "5925f15ec17244f388e1290fb41c15d8e4e9a3ceabb8a3de7c30f7c3fb018f2f"
+    },
+    {
+      "path": "src/external/cocotron/QuartzCore/CALayerContext.m",
+      "before": "96775cd27114aec34a0e9f5261db72b1d3efd827ae71a7e27a06b1259b5e2995",
+      "patch": "12-quartz-restore-context.patch",
+      "after": "f579ebd3a41241be8f96b22aaf3724e045846f343155035b3c8646f85879c5a7",
+      "patch_sha256": "363770c9d4507b269734ebd64308a1dbcff91bd625f5a38ed4b4991a3cbbf70e"
+    },
+    {
+      "path": "src/external/libpthread/src/pthread.c",
+      "before": "0d4a85173acaf4d21def83fb52c8f0c9c428267292298fa5b06e292bea597130",
+      "patch": "13-pthread-default-stack.patch",
+      "after": "92a752754dfd213d48f3379078ac56a88dc850348b3e50593f73a101ce4f7b1d",
+      "patch_sha256": "7c658113652885219b02d8454978dab004de451c597a03260656e3a4ffa1d804"
+    },
+    {
+      "path": "src/external/libpthread/src/CMakeLists.txt",
+      "before": "7ee58c24eb49200c47e0ae03d00e5a30f25d1c554b5e59f171496441a38dcc51",
+      "patch": "14-pthread-stack-configuration.patch",
+      "after": "8843d4b3324a0709700e651920845d123e2227060a468539857e156aec4b9124",
+      "patch_sha256": "3b99b2fddf038ee853165b5d3070d7872c3d739e27a3567aafce8f55a9f2673e"
+    },
+    {
+      "path": "src/external/objc4/runtime/CMakeLists.txt",
+      "before": "244d6279a43a9fb53bc8a01f89b668896d8a66e8dbf26864eca4b3dc2d1c810e",
+      "patch": "15-objc-build-mode.patch",
+      "after": "75276993db14f433808ebf74b7525b3f059c02c57761e017705905fb5d7a3100",
+      "patch_sha256": "00e3cd0281b1a3fcbf23ee0db8b6c7e1e7cccc9b948760ad3767200d245fff16"
+    },
+    {
+      "path": "src/external/libplatform/CMakeLists.txt",
+      "before": "00f2d0844853c6e2aff2c31f56a641e55f220fc0967f9ac216bd4bd37215482a",
+      "patch": "16-portable-string-optimization.patch",
+      "after": "9d5271ffe91126d0d0d11feabc3a81c5f36f43e1006d8c5c1f30774431182aa4",
+      "patch_sha256": "01abdc620e675dfb35e8ae32116b83b9bf9e108c3285a54a9efbaa8c89fc984b"
+    },
+    {
+      "path": "src/external/metal/src/Metal/MTLCommandBuffer.mm",
+      "before": "b481cba4789552012051cf791b53ca7d3beeeecd8487cd2a00f3a2e41ac30e93",
+      "patch": "17-metal-command-queue-ownership.patch",
+      "after": "c9e0326ad365fa71cc439ebf02bece77298b2b18fbbf1f40f9ed8274af4bc541",
+      "patch_sha256": "b4130bcb996562e3b6f6e144753b038435e9585b64938b8aaf8fceab25867938"
+    },
+    {
+      "path": "src/external/cfnetwork/src/HTTP/NSHTTPCookieStorage.m",
+      "before": "50c220d9c4c081c697c76f2be3958b3b3d8db662fe2ae8256fa24e55573ca13b",
+      "patch": "18-compiler-empty-literals-NSHTTPCookieStorage.patch",
+      "after": "9d3f890196e7cf22936181a2d3606c99f89cc27a42b6b73f087b6c57118a4667",
+      "patch_sha256": "24d4d36bdda4daf7615161d1fe9cf6f784075a3e6f9b61d0987714510c432869"
+    },
+    {
+      "path": "src/external/iokitd/src/IORegistryEntry.mm",
+      "before": "3effc7b84ea8fd8d9195677afe7492da9607add535a83932ba81feddc88faa3e",
+      "patch": "19-compiler-empty-literals-IORegistryEntry.patch",
+      "after": "0c3ca782aac3d833ad00186a893c487c51f03f6706cf9d47e2b9719111f54f9b",
+      "patch_sha256": "21f83f68e15adf66071e733a80843654376c34f9a152a030bf3b7302cbb20ead"
+    },
+    {
+      "path": "src/external/security/OSX/sec/Security/SecKeyProxy.m",
+      "before": "9f95cd9d01eb626b0bf3bd65272c3def0f80647b89cfb8e41e5e4e0620f66511",
+      "patch": "20-compiler-empty-literals-SecKeyProxy.patch",
+      "after": "7485c80b1b40def5661b56146dfb96a24ebde025aa1d0e4622d5f0367b3a1e74",
+      "patch_sha256": "4c0bb7cb5cbe7fb4a89ba7c2658da7c1fa70125b20cde3cc25a2e1e61e171eeb"
+    },
+    {
+      "path": "src/external/security/trust/trustd/SecPinningDb.m",
+      "before": "7a11163514f586575f9f76faf05cdcc833fbef40f226f8259e79ad09e2d08c7f",
+      "patch": "21-compiler-empty-literals-SecPinningDb.patch",
+      "after": "3e34dda566745d8924818b9445f1cfc6a0dcb0dd57d1dd4fb4050ea97a54f85d",
+      "patch_sha256": "c69a72dcd8f45bc934f5ee89129180e1220a731c28dcd3d4e6c59f7f7572fceb"
+    },
+    {
+      "path": "src/external/security/keychain/SecureObjectSync/SOSControlServer.m",
+      "before": "422cdbf25fc281f5aaea379ac7dd86738afe6ea4dd4fac6c1be317cc89765218",
+      "patch": "22-compiler-empty-literals-SOSControlServer.patch",
+      "after": "baf6745a1bc8d985ddc1c62619698e1c14fbc6661bcef59c3df54d0379b3f1fd",
+      "patch_sha256": "373c11ce95982ee793e8b339f3d41fdf39651fb3cb78ff512868f1b572c5ef5c"
+    },
+    {
+      "path": "src/external/security/OSX/sec/ipc/server_endpoint.m",
+      "before": "eee5f55637581c18c4561ca538662c4a7aad1bd36d763d9f1b93965bb303aa8d",
+      "patch": "23-compiler-empty-literals-server_endpoint.patch",
+      "after": "9e9ee4140c09d770ebd458178155d711e7d75a1fb333ee3bfd0e699d95004657",
+      "patch_sha256": "a87cace848dd51c784e22a07945578f258454bc4b01a816f0e422a1e6ebff92f"
+    },
+    {
+      "path": "src/external/metal/deps/indium/src/iridium/air.cpp",
+      "before": "70377b508ff07d115a82a65dc0e0848ee0a2b5717d9f6e7f02ff3e69dd6da420",
+      "patch": "24-llvm-branch-opcodes.patch",
+      "after": "46be91917d93f8c773b550ee716880077b420a103b014ba19ebfb99892f5d909",
+      "patch_sha256": "2455cf3ce3b9d368b29442c29dd05b9b47e44191985af6cdda8ab2677ea9fd7d"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/network/connectx.h",
+      "before": null,
+      "patch": "25-connectx-header.patch",
+      "after": "fe3a52d357469dcf92173a4cf654cf36defa46dbd8eb11b17ddb19d5b2f89772",
+      "patch_sha256": "6c31eb0662811b52ad73fe856c35b1976165ea1826d53b4be97cf82e109405a3"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c",
+      "before": null,
+      "patch": "26-connectx-basic.patch",
+      "after": "d7b80c6d16b2c77f0ede6922f03055f08bcff5355f094ed859a3ec9127a9d7fd",
+      "patch_sha256": "115eccdc834c0bf32961dcbdab34122097776d2c41fda32f9fa920e7c9239957"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/CMakeLists.txt",
+      "before": "a8af5c55f3948d32a30ec79c670bd72a0e5dd1a77a259f25f86d93e431504dfa",
+      "patch": "27-connectx-build.patch",
+      "after": "b51d75ca68eb1d1adfe3f9ce129f5c061029fd0ad2e78d0d05901270098adb01",
+      "patch_sha256": "83df35418f43df3d7c98f11dfdb8360580a5a44fdc3486a04ebb962e49147183"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/include/AppKit/NSDisplay.h",
+      "before": "8100159f81da52fe496b077f3bdcd0712b8f3789d690048a903629b6f1d0d8a4",
+      "patch": "28-appkit-queue-state.patch",
+      "after": "dee22d69b671ef27cf8bd6f70894326d36eded13ef889ea26416ecdb722f8b6c",
+      "patch_sha256": "fb54ec6ce4de893c515012e2136bd86b28bd4733a059b857b28fd4ec92351a34"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/NSDisplay.m",
+      "before": "0ddc436a049ead51cbf09baa2d0606adaf3c1c4146191b8a2c61e1ac7b30580f",
+      "patch": "29-appkit-queue-wakeup.patch",
+      "after": "bd4c0b804d848fb35585284d168e3912bfd613c037d003096717b5d26d583a2f",
+      "patch_sha256": "42b1b00780fed599f475e12e6c1f276a247541ca030a08e54307cbc4f5072576"
+    },
+    {
+      "path": "src/external/libunwind/CMakeLists.txt",
+      "before": "98b31a44d4e00217a2b4f6772b4fb33235feae5e24b1a3919857533b1d94f07b",
+      "patch": "30-unwind-linker-compatibility.patch",
+      "after": "08436a97cc5edf767ad8be01bdb5556c22825ef51721fef2001bec1494b184c7",
+      "patch_sha256": "06f4dc245c1d38beca36f5d464045c4c9ebba96c5e47e2d2887c4d83c7107623"
+    }
+  ]
+}

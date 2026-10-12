@@ -1,0 +1,19 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/network/connectx.h
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/network/connectx.h
+@@ -0,0 +1,16 @@
++#ifndef CIDER_CONNECTX_H
++#define CIDER_CONNECTX_H
++#include <stdint.h>
++#include <stddef.h>
++struct iovec;
++/* Darwin sa_endpoints_t layout, independent of host sockaddr types. */
++struct cider_sa_endpoints {
++    unsigned int srcif;
++    const void *srcaddr;
++    unsigned int srcaddrlen;
++    const void *dstaddr;
++    unsigned int dstaddrlen;
++};
++long sys_connectx(int, const struct cider_sa_endpoints *, uint32_t, unsigned int,
++                 const struct iovec *, unsigned int, size_t *, uint32_t *);
++#endif

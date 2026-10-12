@@ -1,0 +1,46 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/bsdthread_register.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/bsdthread_register.c
+@@ -76,7 +76,7 @@
+ 	register void*         arg3 asm("rdx") = funptr;
+ 	register void*         arg4 asm("rcx") = funarg;
+ 	register unsigned long arg5 asm("r8")  = stack_addr;
+-	register unsigned int  arg6 asm("r9d") = flags;
++	register unsigned int  arg6 asm("r9") = flags;
+ #elif __i386__
+ 	register void*         arg1 asm("eax") = self;
+ 	register int           arg2 asm("ebx") = thread_port;
+@@ -140,8 +140,8 @@
+ 	register int   arg2 asm("esi") = thread_port;
+ 	register void* arg3 asm("rdx") = stackaddr;
+ 	register void* arg4 asm("rcx") = item;
+-	register int   arg5 asm("r8d") = reuse;
+-	register int   arg6 asm("r9d") = nevents;
++	register int   arg5 asm("r8") = reuse;
++	register int   arg6 asm("r9") = nevents;
+ #elif __i386__
+ 	register void* arg1 asm("eax") = self;
+ 	register int   arg2 asm("ebx") = thread_port;
+@@ -153,14 +153,18 @@
+ 
+ #if __x86_64__
+ 	__asm__ __volatile__ (
+-		// `_start_wqthread` does not expect the stack to be aligned (using the 
+-		// call instruction will add the return address to the stack, causing 
+-		// it to be aligned).
+-		"jmpq *%[wqueue_entry_point]\n"
++		// The pthread object is above its allocated stack. Restart on that
++		// stack on EVERY reuse, as XNU does; do not accumulate return frames.
++		// _start_wqthread expects 16-byte alignment before its sentinel pushes.
++		// Pin the entry to rax so clearing rbp cannot overwrite the target.
++		"movq %%rdi, %%rsp\n"
++		"andq $-16, %%rsp\n"
++		"xorq %%rbp, %%rbp\n"
++		"jmpq *%%rax\n"
+ 		::
+ 		// Arguments follow the usual x86_64 calling conventions.
+ 		"r"(arg1),"r"(arg2),"r"(arg3),"r"(arg4),"r"(arg5),"r"(arg6),
+-		[wqueue_entry_point] "r"(wqueue_entry_point)
++		[wqueue_entry_point] "a"(wqueue_entry_point)
+ 	);
+ #elif __i386__
+ 	__asm__ __volatile__ (

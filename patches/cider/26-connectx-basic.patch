@@ -1,0 +1,43 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c
+@@ -0,0 +1,40 @@
++/* Basic Darwin connectx: bind, connect, and optional initial data.
++ * Unsupported associations/interfaces/deferred/TFO flags fail explicitly.
++ * A nonblocking EINPROGRESS must reach the caller before any send. */
++#include <darling/emulation/xnu_syscall/bsd/impl/network/connectx.h>
++#include <darling/emulation/xnu_syscall/bsd/impl/network/connect.h>
++#include <darling/emulation/xnu_syscall/bsd/impl/network/bind.h>
++#include <darling/emulation/xnu_syscall/bsd/impl/network/sendmsg.h>
++#include <darling/emulation/conversion/network/recvmsg.h>
++#include <sys/errno.h>
++#include <sys/uio.h>
++
++long sys_connectx(int fd, const struct cider_sa_endpoints *endpoints,
++        uint32_t associd, unsigned int flags, const struct iovec *iov,
++        unsigned int iovcnt, size_t *sent, uint32_t *connid)
++{
++    if (sent) *sent = 0;
++    if (!endpoints || !endpoints->dstaddr || !endpoints->dstaddrlen ||
++            iovcnt > 1024 || (!iov && iovcnt) ||
++            (endpoints->srcaddr && !endpoints->srcaddrlen))
++        return -EINVAL;
++    if (flags || associd || endpoints->srcif)
++        return -ENOTSUP;
++    long result;
++    if (endpoints->srcaddr) {
++        result = sys_bind(fd, endpoints->srcaddr, endpoints->srcaddrlen);
++        if (result < 0) return result;
++    }
++    result = sys_connect_nocancel(fd, endpoints->dstaddr, endpoints->dstaddrlen);
++    if (result < 0) return result;
++    if (connid) *connid = 1;
++    if (iovcnt) {
++        struct bsd_msghdr message = {0};
++        message.msg_iov = (struct iovec *)iov;
++        message.msg_iovlen = (int)iovcnt;
++        result = sys_sendmsg_nocancel(fd, &message, 0);
++        if (result < 0) return result;
++        if (sent) *sent = (size_t)result;
++    }
++    return 0;
++}

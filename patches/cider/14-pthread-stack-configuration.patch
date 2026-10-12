@@ -1,0 +1,8 @@
+--- a/src/external/libpthread/src/CMakeLists.txt
++++ b/src/external/libpthread/src/CMakeLists.txt
+@@ -1,4 +1,5 @@
+ project(libc-pthreads)
++add_definitions(-DCIDER_DEFAULT_THREAD_STACK_SIZE=${CIDER_THREAD_STACK_BYTES}UL)
+ 
+ cmake_minimum_required(VERSION 3.13)
+ 

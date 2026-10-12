@@ -1,0 +1,12 @@
+--- a/src/external/objc4/runtime/CMakeLists.txt
++++ b/src/external/objc4/runtime/CMakeLists.txt
+@@ -24,6 +24,9 @@
+ 			-Wno-cast-of-sel-type -Wstrict-aliasing=2 -Wstrict-overflow=4 -fstrict-aliasing -fno-delete-null-pointer-checks")
+ 
+ add_definitions(-DOBJC_NO_GC -DOBJC_IS_DEBUG_BUILD=1)
++# This port deliberately builds the debug runtime in every configuration.
++# CMake Release/RelWithDebInfo otherwise defines conflicting NDEBUG.
++add_compile_options(-UNDEBUG)
+ add_definitions(-DTARGET_OS_IPHONE=0 -DOS_OBJECT_USE_OBJC=0 -D_LIBCPP_VISIBLE="")
+ 
+ include_directories(${CMAKE_CURRENT_SOURCE_DIR})

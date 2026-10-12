@@ -1,0 +1,11 @@
+--- a/src/external/security/keychain/SecureObjectSync/SOSControlServer.m
++++ b/src/external/security/keychain/SecureObjectSync/SOSControlServer.m
+@@ -132,7 +132,7 @@
+ - (void)initialSyncCredentials:(uint32_t)flags complete:(void (^)(NSArray *, NSError *))complete
+ {
+     if (![self checkEntitlement:(__bridge NSString *)kSecEntitlementKeychainInitialSync]) {
+-        complete(@[], [NSError errorWithDomain:(__bridge NSString *)kSOSErrorDomain code:kSOSEntitlementMissing userInfo:NULL]);
++        complete([NSArray array], [NSError errorWithDomain:(__bridge NSString *)kSOSErrorDomain code:kSOSEntitlementMissing userInfo:NULL]);
+         return;
+     }
+ 

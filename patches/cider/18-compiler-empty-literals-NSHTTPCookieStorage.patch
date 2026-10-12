@@ -1,0 +1,11 @@
+--- a/src/external/cfnetwork/src/HTTP/NSHTTPCookieStorage.m
++++ b/src/external/cfnetwork/src/HTTP/NSHTTPCookieStorage.m
+@@ -105,7 +105,7 @@
+ 
+ - (NSArray*)sortedCookiesUsingDescriptors:(NSArray*)sortOrder
+ {
+-    return @[];
++    return [NSArray array];
+ }
+ 
+ @end

@@ -1,0 +1,20 @@
+--- a/src/external/security/OSX/sec/Security/SecKeyProxy.m
++++ b/src/external/security/OSX/sec/Security/SecKeyProxy.m
+@@ -125,7 +125,7 @@
+     NSError *error;
+     SecKeyOperationContext context = { self.key, operation, (__bridge CFMutableArrayRef)algorithms };
+     id result = CFBridgingRelease(SecKeyRunAlgorithmAndCopyResult(&context, in1, in2, (void *)&error));
+-    return reply(result ? @[result] : @[], error);
++    return reply(result ? @[result] : [NSArray array], error);
+ }
+ @end
+ 
+@@ -273,7 +273,7 @@
+ }
+ 
+ static CFTypeRef SecRemoteKeyCopyOperationResult(SecKeyRef key, SecKeyOperationType operation, SecKeyAlgorithm algorithm, CFArrayRef algorithms, SecKeyOperationMode mode, CFTypeRef in1, CFTypeRef in2, CFErrorRef *error) {
+-    NSMutableArray *parameters = @[].mutableCopy;
++    NSMutableArray *parameters = [NSMutableArray array];
+     if (in1 != NULL) {
+         [parameters addObject:(__bridge id)in1];
+         if (in2 != NULL) {

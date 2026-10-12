@@ -1,0 +1,101 @@
+--- a/src/external/libkqueue/src/common/map.c
++++ b/src/external/libkqueue/src/common/map.c
+@@ -15,10 +15,13 @@
+  */
+ 
+ #include "private.h"
++#include <stdint.h>
++#include <limits.h>
+ 
+ struct map {
+     size_t len;
+     void **data;
++    size_t scan_end; /* greatest successfully inserted index + 1 */
+ };
+ 
+ struct map *
+@@ -26,11 +29,16 @@
+ {
+     struct map *dst;
+ 
++    /* len is inclusive throughout this API. Check before len + 1. */
++    if (len > INT_MAX || len >= SIZE_MAX / sizeof(void *)) {
++        errno = EINVAL;
++        return NULL;
++    }
+     dst = calloc(1, sizeof(struct map));
+     if (dst == NULL)
+         return (NULL);
+ #ifdef _WIN32
+-	dst->data = calloc(len, sizeof(void*));
++	dst->data = calloc(len + 1, sizeof(void*));
+ 	if(dst->data == NULL) {
+ 		dbg_perror("calloc()");
+ 		free(dst);
+@@ -38,7 +46,7 @@
+ 	}
+ 	dst->len = len;
+ #else
+-    dst->data = mmap(NULL, len * sizeof(void *), PROT_READ | PROT_WRITE, 
++    dst->data = mmap(NULL, (len + 1) * sizeof(void *), PROT_READ | PROT_WRITE, 
+             MAP_PRIVATE | MAP_NORESERVE | MAP_ANON, -1, 0);
+     if (dst->data == MAP_FAILED) {
+         dbg_perror("mmap(2)");
+@@ -58,6 +66,10 @@
+            return (-1);
+ 
+     if (atomic_ptr_cas(&(m->data[idx]), 0, ptr) == NULL) {
++        size_t end = (size_t)idx + 1;
++        size_t bound = __atomic_load_n(&m->scan_end, __ATOMIC_ACQUIRE);
++        while (bound < end && !__atomic_compare_exchange_n(&m->scan_end,
++                &bound, end, 0, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) {}
+         dbg_printf("inserted %p in location %d", ptr, idx);
+         return (0);
+     } else {
+@@ -74,7 +86,7 @@
+     if (slowpath(idx < 0 || idx > (int)m->len))
+            return (-1);
+ 
+-    if (atomic_ptr_cas(&(m->data[idx]), ptr, 0) == NULL) {
++    if (atomic_ptr_cas(&(m->data[idx]), ptr, 0) == ptr) {
+         dbg_printf("removed %p from location %d", ptr, idx);
+         return (0);
+     } else {
+@@ -93,6 +105,12 @@
+ 
+     tmp = atomic_ptr_cas(&(m->data[idx]), oldp, newp);
+     if (tmp == oldp) {
++        if (newp != NULL) {
++            size_t end = (size_t)idx + 1;
++            size_t bound = __atomic_load_n(&m->scan_end, __ATOMIC_ACQUIRE);
++            while (bound < end && !__atomic_compare_exchange_n(&m->scan_end,
++                    &bound, end, 0, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) {}
++        }
+         dbg_printf("replaced value %p in location %d with value %p",
+                 oldp, idx, newp);
+         return (0);
+@@ -115,10 +133,12 @@
+ void
+ map_foreach(struct map *m, void(*cb)(int, void*, void*), void* private)
+ {
+-    int i;
+-    for (i = 0; i < (int)m->len; i++) {
+-        if (m->data[i])
+-            cb(i, m->data[i], private);
++    /* Reload the bound: a callback may insert a later entry. Never scan
++     * the entire hard NOFILE limit for each ordinary close. */
++    for (size_t i = 0; i < __atomic_load_n(&m->scan_end, __ATOMIC_ACQUIRE); i++) {
++        void *value = __atomic_load_n(&m->data[i], __ATOMIC_ACQUIRE);
++        if (value != NULL)
++            cb((int)i, value, private);
+     }
+ }
+ 
+@@ -137,7 +157,6 @@
+         nval = atomic_ptr_cas(&(m->data[idx]), oval, NULL);
+     } while (nval != oval);
+ 
+-    m->data[idx] = NULL;
+ 
+     dbg_printf("deleted %p from location %d", oval, idx);
+ 

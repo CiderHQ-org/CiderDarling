@@ -1,5 +1,11 @@
 name: Darling CI
 
+permissions:
+  contents: read
+
+env:
+  GIT_LFS_SKIP_SMUDGE: "1"
+
 on: [push, pull_request]
 
 jobs:
@@ -23,6 +29,7 @@ jobs:
 
     - name: Build DEBs
       run: |
+        python3 tools/cider/prepare.py
         ./tools/debian/make-deb
 
     - name: Move DEBs
@@ -49,6 +56,7 @@ jobs:
 
     - name: Build DSCs
       run: |
+        python3 tools/cider/prepare.py
         ./tools/debian/make-deb --dsc
 
     - name: Move DSCs
@@ -72,6 +80,7 @@ jobs:
 
     - name: Compress source
       run: |
+        python3 source/darling/tools/cider/prepare.py
         mkdir -v archive
         tar --create --use-compress-program="xz -9e" --verbose \
             --file archive/darling-source.tar.xz \

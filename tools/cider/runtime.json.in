@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "name": "CiderDarling",
+  "repository": "https://github.com/CiderHQ-org/CiderDarling",
+  "architecture": "x86_64",
+  "source_revision": "@CIDER_SOURCE_REVISION@",
+  "patch_manifest_sha256": "@CIDER_SERIES_SHA256@",
+  "default_thread_stack_kb": @CIDER_THREAD_STACK_KB@,
+  "source_fixes": [
+    "kqueue_sparse_cleanup", "kqueue_listening_registry",
+    "recvfrom_flag_translation", "ulock_no_errno_x86_64",
+    "ulock_wait2_relative_compare32", "connectx_basic_endpoints",
+    "pthread_default_stack", "loader_thread_failure_cleanup",
+    "workqueue_stack_reset_x86_64", "display_physical_dimensions",
+    "appkit_event_queue_wakeup", "quartz_context_restoration",
+    "cgl_pixel_format_termination", "cgl_core_profile_selection",
+    "cgl_failed_switch_reporting", "portable_string_optimization"
+  ]
+}

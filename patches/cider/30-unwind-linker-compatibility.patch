@@ -1,0 +1,10 @@
+--- a/src/external/libunwind/CMakeLists.txt
++++ b/src/external/libunwind/CMakeLists.txt
+@@ -57,3 +57,7 @@
+ make_fat(unwind_static)
+ 
+ install(TARGETS unwind DESTINATION libexec/darling/usr/lib/system)
++
++# Clang 23 relative switch tables produce chained binds unsupported by the
++# bundled ld64. Preserve switch semantics using branches for this source.
++set_source_files_properties(libunwind/src/libunwind.cpp PROPERTIES COMPILE_OPTIONS "-fno-jump-tables")

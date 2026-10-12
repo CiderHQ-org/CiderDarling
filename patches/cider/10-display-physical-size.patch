@@ -1,0 +1,33 @@
+--- a/src/external/cocotron/CoreGraphics/CGDirectDisplay.m
++++ b/src/external/cocotron/CoreGraphics/CGDirectDisplay.m
+@@ -354,17 +354,20 @@
+ }
+ 
+ CGSize CGDisplayScreenSize(CGDirectDisplayID display) {
+-    printf("STUB %s\n", __PRETTY_FUNCTION__);
+-
+     NSData *edid = edidForDisplay(display);
+-
+-    if (!edid) {
+-        CGRect bounds = CGDisplayBounds(display);
+-
+-        return bounds.size;
+-    }
+-
+-    return (CGSize){.width = 0, .height = 0};
++    if ([edid length] >= 23) {
++        const unsigned char *bytes = [edid bytes];
++        /* EDID base-block dimensions are centimetres, not pixels. */
++        if (bytes[21] != 0 && bytes[22] != 0)
++            return (CGSize){bytes[21] * 10.0, bytes[22] * 10.0};
++    }
++    CGRect bounds = CGDisplayBounds(display);
++    if (bounds.size.width <= 0 || bounds.size.height <= 0)
++        bounds = CGDisplayBounds(CGMainDisplayID());
++    /* Missing/zero EDID dimensions are common on docks and virtual screens. */
++    double width = bounds.size.width > 0 ? bounds.size.width : 1920;
++    double height = bounds.size.height > 0 ? bounds.size.height : 1080;
++    return (CGSize){width * 25.4 / 96.0, height * 25.4 / 96.0};
+ }
+ 
+ uint32_t CGDisplaySerialNumber(CGDirectDisplayID displayId) {

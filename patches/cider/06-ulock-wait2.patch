@@ -1,0 +1,74 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/ulock_wait.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/ulock_wait.c
+@@ -7,6 +7,7 @@
+ #include <darling/emulation/common/base.h>
+ #include <darling/emulation/conversion/errno.h>
+ #include <darling/emulation/conversion/duct_errno.h>
++#include <darling/emulation/xnu_syscall/bsd/helper/bsdthread/cancelable.h>
+ #include <darling/emulation/linux_premigration/linux-syscalls/linux.h>
+ 
+ struct timespec
+@@ -15,12 +16,17 @@
+ 	long tv_nsec;
+ };
+ 
+-// timeout is in us
+-long sys_ulock_wait(uint32_t operation, void* addr, uint64_t value, uint32_t timeout)
++static long ulock_wait_common(uint32_t operation, void* addr, uint64_t value, uint64_t timeout)
+ {
+ 	int ret, op;
++    /* Accept the pinned Darwin wait flags, rejecting unsupported modes. */
++    if (operation & ~(XNU_UL_OPCODE_MASK | XNU_ULF_NO_ERRNO | 0x00070000U))
++        return -EINVAL;
++	if (operation & 0x00020000U) { /* ULF_WAIT_CANCEL_POINT */
++		CANCELATION_POINT();
++	}
+ 	struct timespec ts;
+-	bool no_errno = operation & XNU_ULF_NO_ERRNO;
++	
+ 
+ 
+ 	// char dbg[100];
+@@ -29,8 +35,8 @@
+ 
+ 	if (timeout > 0)
+ 	{
+-		ts.tv_sec = timeout / (1000*1000);
+-		ts.tv_nsec = (timeout % (1000*1000)) * 1000;
++		ts.tv_sec = timeout / 1000000000ULL;
++		ts.tv_nsec = timeout % 1000000000ULL;
+ 	}
+ 
+ 	op = operation & XNU_UL_OPCODE_MASK;
+@@ -49,14 +55,28 @@
+ 			ret = 1;
+ 	}
+ 	else
+-		return no_errno ? -(EINVAL | 0x800) : -EINVAL;
++		return -EINVAL;
+ 
+ 	if (ret < 0)
+ 	{
+ 		ret = errno_linux_to_bsd(ret);
+-		if (no_errno)
+-			ret &= ~0x800;
+ 	}
+ 
+ 	return ret;
+ }
++
++/* wait uses microseconds; wait2 uses nanoseconds. Keep the full uint64_t
++ * timeout instead of rounding, overflowing, or making a short wait infinite.
++ * 64-bit comparisons/absolute deadlines are not implemented by this path. */
++long sys_ulock_wait(uint32_t operation, void* addr, uint64_t value, uint32_t timeout)
++{
++    return ulock_wait_common(operation, addr, value, (uint64_t)timeout * 1000);
++}
++
++long sys_ulock_wait2(uint32_t operation, void* addr, uint64_t value,
++        uint64_t timeout, uint64_t value2)
++{
++    if (value2 != 0)
++        return -EINVAL;
++    return ulock_wait_common(operation, addr, value, timeout);
++}
