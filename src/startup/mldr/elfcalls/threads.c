@@ -220,8 +220,10 @@ void* __darling_thread_create(unsigned long stack_size, unsigned long pth_obj_si
 	// std::cout << "Allocated stack at " << pth << ", size " << stack_size << std::endl;
 
 	// 4096 is below Linux PTHREAD_STACK_MIN and silently kept the default
-	// stack. This stack only bootstraps/checks in and handles thread exit.
-	size_t native_stack_size = PTHREAD_STACK_MIN > 65536 ? PTHREAD_STACK_MIN : 65536;
+	// stack. This stack bootstraps/checks in and handles thread exit, where
+	// glibc also runs host libraries' TLS destructors (graphics drivers), so
+	// keep headroom; it is only reserved address space until touched.
+	size_t native_stack_size = PTHREAD_STACK_MIN > 524288 ? PTHREAD_STACK_MIN : 524288;
 	pthread_attr_setstacksize(&attr, native_stack_size);
 
 	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);

@@ -8,11 +8,10 @@
  #include <mach/host_info.h>
  #include <mach/machine.h>
  #include <mach/mach_init.h>
-@@ -26,6 +28,94 @@
- 	_HW_64BITCAPABLE,
+@@ -27,6 +29,137 @@
  	_HW_CPUFREQUENCY = 15,
  };
-+
+ 
 +static const struct host_basic_info* gethostinfo(void);
 +
 +/* Linux returns the mask size, so count only bytes actually supplied. */
@@ -77,33 +76,77 @@
 +    /* Namespaced mounts may expose the current group directly at the root. */
 +    return allowed;
 +}
++/* Measured again only when the affinity mask changes: apps query these often
++ * (Foundation on every activeProcessorCount), each measurement reads cgroup
++ * and topology files, and the handlers may run on small stacks. A cache entry
++ * packs the mask's hash with the count so it is read in one atomic load. */
++static uint64_t cider_mask_key(const unsigned long mask[128]) {
++    uint64_t key = 1469598103934665603ULL;
++    for (int i = 0; i < 128; i++) key = (key ^ mask[i]) * 1099511628211ULL;
++    return key & ~0xffffULL;
++}
++static int cider_cached_count(const uint64_t* cache, uint64_t key) {
++    uint64_t entry = __atomic_load_n(cache, __ATOMIC_ACQUIRE);
++    return (entry & ~0xffffULL) == key ? (int)(entry & 0xffff) : 0;
++}
++static int cider_store_count(uint64_t* cache, uint64_t key, int count) {
++    if (count > 0 && count <= 0xffff) __atomic_store_n(cache, key | (uint64_t)count, __ATOMIC_RELEASE);
++    return count;
++}
 +int cider_available_cpus(void) {
++    static uint64_t cache;
 +    unsigned long mask[128]; int count = cider_affinity(mask);
-+    return cider_quota_cpus(count ? count : (gethostinfo()->avail_cpus > 0 ? gethostinfo()->avail_cpus : 1));
++    uint64_t key = cider_mask_key(mask);
++    int cached = cider_cached_count(&cache, key);
++    if (cached) return cached;
++    count = cider_quota_cpus(count ? count : (gethostinfo()->avail_cpus > 0 ? gethostinfo()->avail_cpus : 1));
++    return cider_store_count(&cache, key, count);
++}
++#define CIDER_MASK_BITS (sizeof(unsigned long) * 8)
++static int cider_mask_has(const unsigned long mask[128], unsigned long cpu) {
++    return cpu < 128 * CIDER_MASK_BITS && (mask[cpu / CIDER_MASK_BITS] >> (cpu % CIDER_MASK_BITS) & 1);
++}
++/* 1 when cpu is the lowest allowed CPU among its SMT siblings, so counting
++ * those counts cores without remembering every (package, core) pair; 0 when a
++ * lower sibling is allowed; -1 when the topology cannot be read. */
++static int cider_first_sibling(unsigned cpu, const unsigned long mask[128]) {
++    char path[96], list[256];
++    __simple_sprintf(path, "/sys/devices/system/cpu/cpu%u/topology/thread_siblings_list", cpu);
++    if (!cider_read_host_file(path, list, sizeof(list))) return -1;
++    const char* p = list;
++    while (*p >= '0' && *p <= '9') {
++        uint64_t first = cider_decimal(p), last = first;
++        while (*p >= '0' && *p <= '9') p++;
++        if (*p == '-') {
++            last = cider_decimal(++p);
++            while (*p >= '0' && *p <= '9') p++;
++        }
++        for (uint64_t sibling = first; sibling <= last && sibling < cpu; sibling++)
++            if (cider_mask_has(mask, sibling)) return 0;
++        if (*p == ',') p++;
++    }
++    return 1;
 +}
 +int cider_physical_cpus(void) {
++    static uint64_t cache;
 +    unsigned long mask[128]; int allowed = cider_affinity(mask);
 +    if (!allowed) return gethostinfo()->physical_cpu > 0 ? gethostinfo()->physical_cpu : 1;
-+    int packages[8192], cores[8192], count = 0;
-+    for (unsigned cpu = 0; cpu < 128 * sizeof(*mask) * 8; cpu++) {
-+        if (!(mask[cpu / (sizeof(*mask) * 8)] & (1UL << (cpu % (sizeof(*mask) * 8))))) continue;
-+        char path[128], value[32]; int package, core;
-+        __simple_sprintf(path, "/sys/devices/system/cpu/cpu%u/topology/physical_package_id", cpu);
-+        if (!cider_read_host_file(path, value, sizeof(value))) return allowed;
-+        package = __simple_atoi(value, NULL);
-+        __simple_sprintf(path, "/sys/devices/system/cpu/cpu%u/topology/core_id", cpu);
-+        if (!cider_read_host_file(path, value, sizeof(value))) return allowed;
-+        core = __simple_atoi(value, NULL);
-+        int found = 0;
-+        for (int i = 0; i < count; i++) if (packages[i] == package && cores[i] == core) { found = 1; break; }
-+        if (!found) { packages[count] = package; cores[count++] = core; }
++    uint64_t key = cider_mask_key(mask);
++    int count = cider_cached_count(&cache, key);
++    if (count) return count;
++    for (unsigned cpu = 0; cpu < 128 * CIDER_MASK_BITS; cpu++) {
++        if (!cider_mask_has(mask, cpu)) continue;
++        int first = cider_first_sibling(cpu, mask);
++        if (first < 0) { count = allowed; break; }
++        count += first;
 +    }
-+    return count ? count : allowed;
++    return cider_store_count(&cache, key, count ? count : allowed);
 +}
- 
++
  static sysctl_handler(handle_availcpu);
  static sysctl_handler(handle_physicalcpu);
-@@ -42,6 +132,7 @@
+ static sysctl_handler(handle_physicalcpu_max);
+@@ -42,6 +175,7 @@
  static sysctl_handler(handle_cpufrequency);
  
  const struct known_sysctl sysctls_hw[] = {
@@ -111,7 +154,7 @@
  	{ .oid = HW_AVAILCPU, .type = CTLTYPE_INT, .exttype = "", .name = "availcpu", .handler = handle_availcpu },
  	{ .oid = HW_NCPU, .type = CTLTYPE_INT, .exttype = "", .name = "ncpu", .handler = handle_availcpu },
  	{ .oid = _HW_PHYSICAL_CPU, .type = CTLTYPE_INT, .exttype = "", .name = "physicalcpu", .handler = handle_physicalcpu },
-@@ -55,15 +146,18 @@
+@@ -55,15 +189,18 @@
  	{ .oid = _HW_CPUTHREADTYPE, .type = CTLTYPE_INT, .exttype = "", .name = "cputhreadtype", .handler = handle_cputhreadtype },
  	{ .oid = _HW_64BITCAPABLE, .type = CTLTYPE_INT, .exttype = "", .name = "cpu64bit_capable", .handler = handle_cpu64bitcapable },
  	{ .oid = HW_MACHINE, .type = CTLTYPE_STRING, .exttype = "S", .name = "machine", .handler = handle_machine },
@@ -123,25 +166,22 @@
  static const struct host_basic_info* gethostinfo(void)
  {
  	static struct host_basic_info hinfo;
--
--	if (!hinfo.avail_cpus)
 +	static int ready, lock;
 +	while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE))
 +		LINUX_SYSCALL(__NR_sched_yield);
-+
+ 
+-	if (!hinfo.avail_cpus)
 +	if (!ready)
  	{
  		mach_msg_type_number_t hcount = HOST_BASIC_INFO_COUNT;
  		mach_port_t hself;
-@@ -71,22 +165,24 @@
+@@ -71,22 +208,24 @@
  		hself = mach_host_self();
  		host_info(hself, HOST_BASIC_INFO, &hinfo, &hcount);
  		mach_port_deallocate(mach_task_self(), hself);
--	}
--
 +		ready = 1;
-+	}
-+
+ 	}
+ 
 +	__atomic_store_n(&lock, 0, __ATOMIC_RELEASE);
  	return &hinfo;
  }
@@ -162,7 +202,7 @@
  	return 0;
  }
  
-@@ -100,7 +196,8 @@
+@@ -100,7 +239,8 @@
  sysctl_handler(handle_logicalcpu)
  {
  	sysctl_handle_size(sizeof(int));
@@ -172,7 +212,7 @@
  	return 0;
  }
  
-@@ -171,14 +268,12 @@
+@@ -171,14 +311,12 @@
  
  sysctl_handler(handle_cpufrequency)
  {

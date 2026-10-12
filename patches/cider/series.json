@@ -75,9 +75,9 @@
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c",
       "before": "74487ac3d2e8bea8e5dda84d71518afda5da1e01d1add5e8b3cbb23b12c6e324",
+      "after": "1e6d6025b22d6296baf06b2a5e3382ffeb25086c352c0c0795acebc81785d26b",
       "patch": "11-workqueue-creation-failure.patch",
-      "after": "1284a217bca228eb43541927a93739c4a6ca97afa8fa69353872ae76119e3208",
-      "patch_sha256": "8c7596284b32251744f577a7fd126e9f07774c86c538ef2dcef8a4ffdc88c8d5"
+      "patch_sha256": "586bb7a2e4484fa56b2246fd0f5330f256fac086e0b382e694fe0ebf09794ffa"
     },
     {
       "path": "src/external/cocotron/QuartzCore/CALayerContext.m",
@@ -221,10 +221,10 @@
     },
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_hw.c",
-      "patch": "32-cpu-affinity-topology.patch",
       "before": "a0930c53a9df8f3f812f42598e8ec5ab6c2a90fb7eaa204b5cb0e24789a051e1",
-      "after": "d2730bdf23a701ba22ab21c5552a44aaedfc74916d24c606d6ee38ce1720e5f1",
-      "patch_sha256": "977cbfe1bd76b7ede1c21bc1e734ffb1d2d57ee04ff503380d1828b382549c35"
+      "after": "93f0462f74c257b0a3a19c6241b0f926f002690ce718fd6996571065a51d753f",
+      "patch": "32-cpu-affinity-topology.patch",
+      "patch_sha256": "fed8968ad6a825706145b996f2c462c89ab4e5a399242a9b35c2d05bbe4d02a1"
     },
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/helper/misc/sysctl_hw.h",
@@ -414,6 +414,20 @@
       "before": "309cd389308bf7e4187d71a95f18ec3a12aad5b4f8e3e39eb368f57109b03ef2",
       "after": "2e4d8dae3501d904e94ed785d1e5be8c9362818881fe613f3fc6f04399f8e9c9",
       "patch_sha256": "0ebef5adc3f9ff4bcba4c90b5fd184f662c1616ee069738b4f5b5c6d92bedac4"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/pthread_canceled.c",
+      "before": "8110f5f9cf5b7e5296fbf226ef58dbeae87c69be1bd697571c8b737de91bea5e",
+      "after": "48f126f1cf7d0a686d69c2babf997f3164c346bbe8d18c83860b2ead8c3cb780",
+      "patch": "60-pthread-canceled-local.patch",
+      "patch_sha256": "53a17648f0a89f5fe35ce49597269165a0d3291b848bbb8929c8dac5e741cce0"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/linux_premigration/signal/sigexc.c",
+      "before": "c35005cefca7143bd9079420952f01ad16391c9a684bff2070114dca29fec07c",
+      "after": "65844cb1e2a305ec40d5cbbe53b1589bead491a91d5f0cc3919f03a736be0ad5",
+      "patch": "61-sigexc-debug-opt-in.patch",
+      "patch_sha256": "3af099b95d321af966e77ee11655ca4dcefcd602877429a983a7a9d71c6109a2"
     }
   ]
 }

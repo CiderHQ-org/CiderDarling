@@ -19,6 +19,8 @@
     "workqueue_atomic_semaphores", "workqueue_event_ownership", "psynch_error_abi",
     "cgl_framebuffer_negotiation", "cgl_drawable_lifecycle", "cgl_thread_binding_lifetime",
     "bounded_numeric_timing_traces", "safe_private_runtime_staging",
-    "cgl_native_visual_matching", "x11_colormap_lifetime", "cgl_context_swap_interval"
+    "cgl_native_visual_matching", "x11_colormap_lifetime", "cgl_context_swap_interval",
+    "workqueue_deferred_requests", "pthread_cancel_query_local", "sigexc_trace_opt_in",
+    "cpu_counts_cached", "loader_bootstrap_stack_headroom"
   ]
 }

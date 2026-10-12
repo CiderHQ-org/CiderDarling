@@ -177,6 +177,14 @@ extern void *_platform_memmove(void *, const void *, size_t);
                  ROOT / "validation/workqueue.c", ROOT / "validation/workqueue.S",
                  "-o", temporary / "workqueue"])
             run([temporary / "workqueue"])
+
+        requests = (XNU / "src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c").read_text()
+        deferral = requests[requests.index("static int workq_running,"):requests.index("TAILQ_HEAD(")]
+        deferral += function(requests, "static void workq_lock(") + function(requests, "static void workq_unlock(")
+        deferral += requests[requests.index("#define WQ_DEFERRED_SLOTS"):requests.index("static int extract_wq_flags(")]
+        write(temporary, "workqueue-deferral-source.h", deferral)
+        run([*common, "-I", temporary, ROOT / "validation/workqueue-deferral.c", "-o", temporary / "workqueue-deferral"])
+        run([temporary / "workqueue-deferral"], env=environment)
     print("CiderDarling source regressions passed", flush=True)
 
 

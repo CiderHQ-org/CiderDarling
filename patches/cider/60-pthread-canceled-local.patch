@@ -1,0 +1,17 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/pthread_canceled.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/pthread_canceled.c
+@@ -15,9 +15,9 @@
+ 	if (action == 0 && !uses_threads())
+ 		return -EINVAL;
+ 
+-	int ret = dserver_rpc_pthread_canceled(action);
+-	if (ret < 0)
+-		ret = errno_linux_to_bsd(ret);
+-
+-	return ret;
++	// darlingserver implements neither this call nor pthread_markcancel (both
++	// always answer ENOSYS), so no thread is ever marked canceled. Every
++	// cancellation point (read, write, recv, poll, waits...) asks, so answer
++	// here instead of making a server round trip per call.
++	return -ENOSYS;
+ }

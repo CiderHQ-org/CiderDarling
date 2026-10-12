@@ -18,7 +18,7 @@
  
  #define WQOPS_QUEUE_ADD 1
  #define WQOPS_QUEUE_REMOVE 2
-@@ -60,11 +69,7 @@
+@@ -60,11 +69,8 @@
  
  #define WORKQ_EXIT_THREAD_NKEVENT (-1)
  
@@ -27,18 +27,18 @@
 -// static int workq_parked_threads = 0; // num spawned, but unused threads
 -static int workq_parked[WQ_MAX_THREADS];
 -static int workq_parked_prio[WQ_MAX_THREADS];
-+static int workq_sem, workq_limit, workq_parked_lock;
++static int workq_running, workq_limit, workq_hard_limit, workq_parked_lock;
++static int workq_capacity_seq, workq_capacity_waiters;
  
  TAILQ_HEAD(tailhead, parked_thread) workq_parked_head = TAILQ_HEAD_INITIALIZER(workq_parked_head);
  
-@@ -75,14 +80,17 @@
+@@ -75,14 +81,17 @@
  	TAILQ_ENTRY(parked_thread) entries;
  };
  
 -static void list_add(struct parked_thread* head, struct parked_thread* item);
 -static void list_remove(struct parked_thread* head, struct parked_thread* item);
--
-+
+ 
 +
 +
 +#ifndef _STRUCT_TIMESPEC
@@ -52,7 +52,7 @@
  
  void __attribute__((weak)) os_unfair_lock_unlock(os_unfair_lock_t lock) {}
  void __attribute__((weak)) os_unfair_lock_lock(os_unfair_lock_t lock) {}
-@@ -92,8 +100,46 @@
+@@ -92,8 +101,46 @@
  
  static int priority_to_class(int prio);
  
@@ -101,7 +101,73 @@
  
  static void rpc_guard(int fd) {
  	guard_entry_options_t options;
-@@ -142,19 +188,8 @@
+@@ -112,6 +159,65 @@
+ 	.rpc_unguard = rpc_unguard,
+ };
+ 
++/* Thread requests that found no worker slot. libdispatch counts a request as
++ * pending until a worker starts for that root queue and never retries one
++ * that failed, so a refused request would starve its queue for good. They are
++ * queued here instead and handed to the next worker that returns. Requests
++ * with the same flags are interchangeable, so only a count is kept. All of
++ * this is protected by workq_lock. */
++#define WQ_DEFERRED_SLOTS 32
++static struct { int flags, count; } workq_deferred[WQ_DEFERRED_SLOTS];
++
++static int workq_defer(int flags, int count) {
++    int free_slot = -1;
++    for (int i = 0; i < WQ_DEFERRED_SLOTS; i++) {
++        if (workq_deferred[i].count && workq_deferred[i].flags == flags) {
++            workq_deferred[i].count += count;
++            return 1;
++        }
++        if (!workq_deferred[i].count && free_slot < 0) free_slot = i;
++    }
++    if (free_slot < 0) return 0;
++    workq_deferred[free_slot].flags = flags;
++    workq_deferred[free_slot].count = count;
++    return 1;
++}
++
++/* The most urgent deferred request (highest QoS), if any. */
++static int workq_take_deferred(int* flags) {
++    int best = -1;
++    for (int i = 0; i < WQ_DEFERRED_SLOTS; i++) {
++        if (!workq_deferred[i].count) continue;
++        if (best < 0 || (workq_deferred[i].flags & WQ_FLAG_THREAD_PRIO_MASK) >
++                (workq_deferred[best].flags & WQ_FLAG_THREAD_PRIO_MASK))
++            best = i;
++    }
++    if (best < 0) return 0;
++    *flags = workq_deferred[best].flags;
++    workq_deferred[best].count--;
++    return 1;
++}
++
++/* Requests that cannot be deferred (kevent deliveries, a full table) wait for
++ * a slot instead, as upstream did for every request. */
++static void workq_release_slot(void) {
++    workq_running--;
++    if (workq_capacity_waiters) {
++        __atomic_add_fetch(&workq_capacity_seq, 1, __ATOMIC_RELEASE);
++        LINUX_SYSCALL(__NR_futex, &workq_capacity_seq, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 0x7fffffff, NULL, NULL, 0);
++    }
++}
++
++static void workq_wait_for_slot(void) {
++    int seq = __atomic_load_n(&workq_capacity_seq, __ATOMIC_ACQUIRE);
++    struct timespec timeout = { 0, 100 * 1000 * 1000 };
++    workq_capacity_waiters++;
++    workq_unlock();
++    LINUX_SYSCALL(__NR_futex, &workq_capacity_seq, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, seq, &timeout, NULL, 0);
++    workq_lock();
++    workq_capacity_waiters--;
++}
++
+ static int extract_wq_flags(int priority) {
+ 	int flags = 0;
+ 	int qos = _pthread_priority_thread_qos(priority);
+@@ -142,19 +248,8 @@
  			
  			// __simple_printf("kevent return, obj=%p, nkevents=%d\n", wq_event, nkevents);
  
@@ -123,7 +189,7 @@
  		}
  		case WQOPS_THREAD_RETURN:
  		{
-@@ -162,11 +197,11 @@
+@@ -162,11 +257,11 @@
  			// and can be either recycled or terminated
  
  			int thread_self;
@@ -137,16 +203,32 @@
  
  			// Semaphore locked state (wait for wakeup)
  			me.sem = 0;
-@@ -185,7 +220,7 @@
+@@ -179,13 +274,22 @@
+ 			// like i said before, the only case where we actually need these flags to be set here is when the thread is going to die immediately after creation
+ 			me.flags = extract_wq_flags(prio);
+ 
++			// A request that found no free slot takes this worker's slot over
++			int deferred_flags;
++			if (workq_take_deferred(&deferred_flags))
++			{
++				me.flags = deferred_flags;
++				workq_unlock();
++				goto wakeup;
++			}
++
+ 			// Enqueue for future WQOPS_QUEUE_REQTHREADS
+ 			TAILQ_INSERT_HEAD(&workq_parked_head, &me, entries);
+ 
  			// Decrease the amount of running threads
- 			sem_up(&workq_sem);
+-			sem_up(&workq_sem);
++			workq_release_slot();
  
 -			os_unfair_lock_unlock(&workq_parked_lock);
 +			workq_unlock();
  
  			// Wait until someone calls WQOPS_QUEUE_REQTHREADS
  			// and wakes us up
-@@ -193,17 +228,17 @@
+@@ -193,17 +297,17 @@
  			{
  				// Make sure we haven't just been woken up before locking the queue
  				// and remove us from the queue if not.
@@ -168,7 +250,7 @@
  
  				terminating = true;
  
-@@ -214,14 +249,14 @@
+@@ -214,14 +318,14 @@
  wakeup: // we actually want to go back into the thread to do work
  			// __simple_printf("Thread %d woken up, prio=%d\n", thread_self, me.flags & WQ_FLAG_THREAD_PRIOMASK);
  
@@ -185,7 +267,7 @@
  			wqueue_entry_point_asm_jump(dthread, thread_self, dthread->stackbottom, 
  				(!terminating && me.event) ? me.event->events : NULL, 
  				me.flags | WQ_FLAG_THREAD_REUSE,
-@@ -252,12 +287,25 @@
+@@ -252,12 +356,42 @@
  			
  			// __simple_printf("Thread requested with prio %d\n", prio & WQ_FLAG_THREAD_PRIOMASK);
  
@@ -198,24 +280,41 @@
 +                 * for blocked/overcommit workers and a finite resource ceiling. */
 +                workq_limit = cpus > WQ_MAX_THREADS / 4 ? WQ_MAX_THREADS : cpus * 4;
 +                if (workq_limit < 64) workq_limit = 64;
-+                workq_sem = workq_limit;
++                /* Overcommit requests (serial queues, completions for the main
++                 * queue) and kevent deliveries may go past that, as on XNU
++                 * (WORKQUEUE_MAXTHREADS 512): they must not wait for workers
++                 * that may themselves be waiting for them. */
++                workq_hard_limit = workq_limit > 512 ? workq_limit : 512;
 +            }
-+            int limit = workq_limit;
 +            workq_unlock();
-+            if (affinity < 0 || affinity > limit) return -EINVAL;
++            if (affinity < 0) return -EINVAL;
++            int urgent = (flags & WQ_FLAG_THREAD_OVERCOMMIT) || wq_event != NULL;
 +            for (i = 0; i < affinity; i++)
  			{
- 				// Increase the amount of running threads
+-				// Increase the amount of running threads
 -				sem_down(&workq_sem, -1);
--
--				os_unfair_lock_lock(&workq_parked_lock);
-+				if (!sem_down(&workq_sem, 0)) return -EAGAIN;
-+
 +				workq_lock();
+ 
+-				os_unfair_lock_lock(&workq_parked_lock);
++				// Increase the amount of running threads, or hand the rest of
++				// the request to workers as they return (never refuse it)
++				if (workq_running >= (urgent ? workq_hard_limit : workq_limit))
++				{
++					if (wq_event == NULL && workq_defer(flags, affinity - i))
++					{
++						workq_unlock();
++						return 0;
++					}
++					workq_wait_for_slot();
++					workq_unlock();
++					i--;
++					continue;
++				}
++				workq_running++;
  
  				if (workq_parked_head.tqh_first != NULL)
  				{
-@@ -276,26 +324,25 @@
+@@ -276,26 +410,31 @@
  
  					// Resume the thread
  					sem_up(&thread->sem);
@@ -230,11 +329,10 @@
  
  				// __simple_printf("Spawning a new thread, nevents=%d\n", (wq_event != NULL) ? wq_event->nevents : -1);
 -				wq_event_pending = wq_event;
--
++	
+ 
 -				__darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
 -						(wq_event != NULL) ? wq_event->events : NULL, flags,
-+	
-+
 +				void *created = __darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
 +						wq_event, flags,
  						(wq_event != NULL) ? wq_event->nevents : 0,
@@ -246,13 +344,19 @@
 -					return ret;
 -				}*/
 +				if ((intptr_t)created < 0 && (intptr_t)created >= -4095) {
-+                    sem_up(&workq_sem);
++                    // Running workers pick the request up when they return;
++                    // with none left, nothing would, so report the failure
++                    workq_lock();
++                    workq_release_slot();
++                    int queued = wq_event == NULL && workq_running > 0 && workq_defer(flags, affinity - i);
++                    workq_unlock();
++                    if (queued) return 0;
 +                    return (intptr_t)created;
 +                }
  			}
  			return 0;
  		}
-@@ -320,36 +367,41 @@
+@@ -320,36 +459,41 @@
  #endif
  }
  
@@ -275,7 +379,11 @@
 -	}
 -
 -	return 1;
--}
++static int64_t workq_now_ns(void) {
++    struct timespec now;
++    if (LINUX_SYSCALL(__NR_clock_gettime, 1 /* CLOCK_MONOTONIC */, &now) < 0) return -1;
++    return (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
+ }
 -
 -void sem_up(int* sem)
 -{
@@ -286,11 +394,6 @@
 -		*sem = 1;
 -		__linux_futex(sem, FUTEX_WAKE, 1, NULL, 0, 0);
 -	}
-+static int64_t workq_now_ns(void) {
-+    struct timespec now;
-+    if (LINUX_SYSCALL(__NR_clock_gettime, 1 /* CLOCK_MONOTONIC */, &now) < 0) return -1;
-+    return (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
-+}
 +int sem_down(int* sem, int timeout) {
 +    uint64_t started = CIDER_TRACE_BEGIN();
 +    int64_t deadline = -1;
