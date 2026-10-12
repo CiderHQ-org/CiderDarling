@@ -1,0 +1,3 @@
+# Unified diffs must preserve their context bytes for the verified source series.
+patches/cider/*.patch -text -whitespace
+patches/cider/series.json text eol=lf
