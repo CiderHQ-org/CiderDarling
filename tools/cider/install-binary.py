@@ -70,6 +70,9 @@ def host_glibcxx():
     return best
 
 
+FILE_CAPABILITIES = {"libexec/darling/usr/sbin/fseventsd": "cap_sys_admin=ep"}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("archive", type=Path)
@@ -128,6 +131,10 @@ def main():
         if data.get("source_revision") != revision or data.get("patch_manifest_sha256") != manifest["patch_manifest_sha256"]:
             die("the unpacked runtime does not match the manifest.")
         subprocess.run(sudo + ["mv", "--no-target-directory", "--", str(unpacked), str(target)], check=True)
+        # File capabilities are not in the archive; `cmake --install` sets these.
+        for relative, capabilities in FILE_CAPABILITIES.items():
+            if subprocess.run(sudo + ["setcap", capabilities, str(target / relative)], check=False).returncode:
+                print("warning: could not set %s on %s" % (capabilities, relative), file=sys.stderr)
     except (subprocess.CalledProcessError, OSError) as error:
         print("error: installation failed: %s" % error, file=sys.stderr)
         sys.exit(1)

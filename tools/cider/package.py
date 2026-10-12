@@ -6,10 +6,15 @@ The archive holds the tree that `cmake --install` produces for the prefix
 so it can be unpacked on another x86_64 Linux host instead of compiling there.
 Nothing is installed on this machine and nothing is uploaded.
 
-Outputs, in --output:
+Outputs, in --output (with --flavor, the names end in -x86_64-<flavor>):
   ciderdarling-<revision>-x86_64.tar.xz
   ciderdarling-<revision>-x86_64.tar.xz.sha256
   ciderdarling-<revision>-x86_64.json     (revision, hashes, host requirements)
+
+Darling's bridges to host libraries (usr/lib/native) name the exact library
+versions of the build host, so an archive suits hosts with the same library
+generation as its build host (the manifest lists them): CI builds one flavor
+per distribution family.
 """
 import argparse
 import hashlib
@@ -73,6 +78,25 @@ def host_requirements(stage):
             "shared_libraries": sorted(needed)}
 
 
+def native_libraries(runtime):
+    """Host libraries the native bridges load, by exact soname."""
+    names = set()
+    pattern = re.compile(rb"lib[A-Za-z0-9_+-]+\.so(?:\.[0-9]+)*")
+    for path in (runtime / "libexec/darling/usr/lib/native").glob("*.dylib"):
+        names.update(match.decode() for match in pattern.findall(path.read_bytes()))
+    return sorted(names)
+
+
+def build_host():
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            if line.startswith("PRETTY_NAME="):
+                return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return "unknown"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--build-dir", type=Path, default=ROOT / "build-release",
@@ -83,9 +107,12 @@ def main():
                         help="package an already built --build-dir, configured for this revision's prefix")
     parser.add_argument("--allow-dirty", action="store_true",
                         help="package with uncommitted changes (the revision in the archive will not describe it)")
+    parser.add_argument("--flavor", help="distribution family the build host represents, e.g. arch or ubuntu24.04")
     args = parser.parse_args()
     if not 1 <= args.jobs <= 128:
         parser.error("--jobs must be between 1 and 128")
+    if args.flavor is not None and not re.fullmatch(r"[a-z0-9][a-z0-9.]{0,31}", args.flavor):
+        parser.error("--flavor must be lowercase letters, digits and dots")
 
     revision = output(["git", "rev-parse", "HEAD"], cwd=ROOT).strip()
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -97,7 +124,7 @@ def main():
     epoch = output(["git", "show", "-s", "--format=%ct", "HEAD"], cwd=ROOT).strip()
     prefix = INSTALL_ROOT / revision
     build = args.build_dir.resolve()
-    name = "ciderdarling-%s-x86_64" % revision
+    name = "ciderdarling-%s-x86_64" % revision + ("-" + args.flavor if args.flavor else "")
 
     if not args.skip_build:
         run([sys.executable, ROOT / "tools/cider/prepare.py"])
@@ -150,11 +177,13 @@ def main():
         manifest = {
             "schema_version": 1, "name": "CiderDarling", "architecture": "x86_64",
             "source_revision": revision, "patch_manifest_sha256": series,
+            "source_date": int(epoch), "flavor": args.flavor, "build_host": build_host(),
             "install_prefix": str(prefix), "archive": archive.name,
             "archive_sha256": digest, "archive_bytes": archive.stat().st_size,
             "installed_bytes": sum(path.stat().st_size for path in runtime.rglob("*")
                                    if path.is_file() and not path.is_symlink()),
             "build_type": "RelWithDebInfo", "metal": False, **requirements,
+            "native_libraries": native_libraries(runtime),
         }
         (args.output / (name + ".json")).write_text(json.dumps(manifest, indent=2) + "\n")
         print(json.dumps(manifest, indent=2))

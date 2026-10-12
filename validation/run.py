@@ -39,6 +39,7 @@ def main():
     run(["python3", ROOT / "tools/cider/audit-series.py"])
     run(["python3", ROOT / "validation/prepare_test.py"])
     run(["python3", ROOT / "validation/diagnostics_test.py"])
+    run(["python3", ROOT / "validation/aur_package_test.py"])
     run(["python3", ROOT / "validation/runtime-source.py"])
     compiler = os.environ.get("CC", "clang")
     environment = dict(os.environ)

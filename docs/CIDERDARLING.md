@@ -122,6 +122,31 @@ older distribution to widen that range. The Darling client still needs the
 host kernel features and graphics libraries that a source build needs at run
 time, and the pinned revision must be published before launchers can fetch it.
 
+Darling's bridges to host libraries (`usr/lib/native`) load the exact library
+versions of the build host (for example `libavcodec.so.62`), so an archive
+also needs a host of the same library generation. `--flavor` names the
+distribution family and the manifest lists those libraries
+(`native_libraries`).
+
+### Continuous builds
+
+`.github/workflows/ciderdarling-bin.yml` builds every commit on `main` twice,
+in an Arch Linux container (`arch`) and on Ubuntu 24.04 (`ubuntu24.04`, for
+Debian-family hosts with glibc 2.39 or newer), using the scripts in
+`tools/cider/ci/`. Each run publishes the release `bin-<first 12 hex digits>`
+with both archives, their `.sha256` and manifests, and for Arch the
+`ciderdarling-bin` recipe (`.PKGBUILD`, `.SRCINFO`, `.install`) and the built
+`.pkg.tar.zst`. An existing release is kept unless a manual run asks to
+replace it, since its checksums may already be pinned.
+
+`tools/cider/aur-package.py` writes the recipe from the Arch manifest:
+dependencies are the packages that own the linked and bridged libraries, the
+package keeps `bin/darling` setuid root, links `/usr/bin/ciderdarling`, and
+restores `fseventsd`'s file capability on install. CI builds the package from
+the recipe and checks the setuid bit before publishing. To push the recipe to
+the AUR as well, set the repository variable `AUR_PUBLISH` to `true` and the
+secret `AUR_SSH_PRIVATE_KEY` to the AUR maintainer's SSH key.
+
 ## Host diagnostics
 
 ```sh
