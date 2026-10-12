@@ -78,10 +78,11 @@ Root-repository changes remain normal Git changes. To compile a reversed
 dependency baseline, use a separate build directory with
 `-DCIDER_APPLY_PATCHES=OFF`; normal configuration reapplies the series.
 
-No build, validation, bootstrap, or doctor command installs over system
-Darling, stops a running prefix, or opens Cider authentication data. Upstream
-installation commands remain separate and can stop Darling processes. Do not
-run installation against a live game or prefix during development.
+Build, validation, bootstrap, and doctor commands do not install over system
+Darling or open Cider authentication data. `CIDER_SHUTDOWN_ON_INSTALL` defaults
+to OFF; enabling it preserves upstream's system-wide shutdown hook, skipped for
+DESTDIR packaging. Private staging keeps this option OFF. Live installation
+remains a separate step.
 
 ## Host diagnostics
 
@@ -116,10 +117,12 @@ Current Cider settings and fallback shims have not been modified by this work.
 `validation/darwin-runtime.c` is a standalone Mach-O integration fixture for
 the runtime actually installed in a dedicated prefix. It exercises exported
 ulock/wait2 symbols without the Cider shim, pthread default attributes,
-nonblocking/PEEK datagrams, and kqueue close cleanup. Its five-second alarm
+nonblocking/PEEK datagrams, and kqueue close cleanup. Its thirty-second alarm
 bounds missing/incorrect waits. The 8 MiB assertion assumes the default build
-policy. This fixture has been cross-compiled; execution against the new runtime
-is a separate validation step.
+policy. The fixture now also checks CPU sysctl types, active CPU capacity,
+condition-variable timeout/wakeup and libdispatch parallel work. It has been
+executed successfully against the private staged runtime. See
+[the current validation record](PERFORMANCE.md).
 
 For a development machine with Darling's libraries in `/usr/libexec/darling`:
 
@@ -156,9 +159,8 @@ CI results require the repository to be published and workflows to run.
 
 ## Next work
 
-1. Run isolated-prefix Mach-O regressions for the exported ulock ABI, socket
-   lifecycle, real AppKit event delivery in default/tracking/modal modes, and
-   CGL presentation. Then validate startup, join, leave, and shutdown with the
+1. Keep the passing isolated-prefix Mach-O, AppKit and CGL regressions running
+   on supported builds. Validate startup, join, leave, and shutdown with the
    actual client and corresponding migrated shim fixes disabled.
 2. Investigate the remaining long leave-game frame gap separately from kqueue
    cleanup, plus condition-variable sequence errors and lost wakeups. Preserve

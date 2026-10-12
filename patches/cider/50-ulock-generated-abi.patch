@@ -1,0 +1,21 @@
+--- a/src/external/xnu/gen/bsdsyscalls/SYS.h
++++ b/src/external/xnu/gen/bsdsyscalls/SYS.h
+@@ -147,7 +147,17 @@
+ 	#define UNIX_SYSCALL_NONAME(name, nargs, cerror)		 \
+ 		.globl	cerror								;\
+ 		movl	$ SYS_##name, %eax			;\
+-		call __darling_bsd_syscall							;\
++		.if (SYS_##name == SYS_ulock_wait) || (SYS_##name == SYS_ulock_wake) || (SYS_##name == SYS_ulock_wait2) ;\
++		subq $16, %rsp ;\
++		movl %edi, (%rsp) ;\
++		call __darling_bsd_syscall ;\
++		movl (%rsp), %ecx ;\
++		addq $16, %rsp ;\
++		testl $0x01000000, %ecx ;\
++		jnz 2f ;\
++		.else ;\
++		call __darling_bsd_syscall ;\
++		.endif ;\
+ 		cmpq	$-4095, %rax	;\
+ 		jb		2f							;\
+ 		movq	%rax, %rdi							;\

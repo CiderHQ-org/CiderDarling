@@ -1,0 +1,10 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_rw_unlock.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_rw_unlock.c
+@@ -16,5 +16,6 @@
+ 		__simple_abort();
+ 	}
+ 
+-	return (ret) ? ret : retval;
++	/* RPC reply codes are positive Darwin errno values, not sequence updates. */
++	return ret ? -(long)ret : (long)retval;
+ }

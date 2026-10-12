@@ -1,5 +1,14 @@
 --- a/src/external/cocotron/QuartzCore/CALayerContext.m
 +++ b/src/external/cocotron/QuartzCore/CALayerContext.m
+@@ -68,7 +68,7 @@
+     }
+ 
+     _subwindow = [subwindow retain];
+-    _cglWindow = CGLGetWindow([_subwindow nativeWindow]);
++    _cglWindow = CGLGetWindowForContext(_glContext, [_subwindow nativeWindow]);
+ 
+     [_subwindow show];
+ 
 @@ -94,8 +94,10 @@
  }
  

@@ -14,6 +14,9 @@ typedef void *CGLWindowRef;
 CGL_EXPORT CGLError CGLRegisterNativeDisplay(void *native_display);
 
 CGL_EXPORT CGLWindowRef CGLGetWindow(void *native_window);
+CGL_EXPORT CGLWindowRef CGLGetWindowForContext(CGLContextObj context, void *native_window);
+CGL_EXPORT unsigned long CGLGetPixelFormatNativeVisualID(CGLPixelFormatObj format);
+CGL_EXPORT unsigned long CGLGetNativeVisualID(CGLContextObj context);
 CGL_EXPORT void CGLDestroyWindow(CGLWindowRef window);
 
 CGL_EXPORT CGLError CGLContextMakeCurrentAndAttachToWindow(CGLContextObj context, CGLWindowRef window);

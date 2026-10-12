@@ -1,0 +1,13 @@
+--- a/src/external/cocotron/AppKit/NSWindow.m
++++ b/src/external/cocotron/AppKit/NSWindow.m
+@@ -3462,6 +3462,10 @@
+     return [_platformWindow createSubWindowWithFrame: frame];
+ }
+ 
++- (CGSubWindow *) _createSubWindowWithFrame: (CGRect) frame visualID: (unsigned long) visualID {
++    return [_platformWindow createSubWindowWithFrame:frame visualID:visualID];
++}
++
+ + (BOOL) allowsAutomaticWindowTabbing {
+     return _allowsAutomaticWindowTabbing;
+ }

@@ -36,7 +36,10 @@ def write(root, relative, content):
 
 def main():
     run(["python3", ROOT / "tools/cider/prepare.py", "--check"])
+    run(["python3", ROOT / "tools/cider/audit-series.py"])
     run(["python3", ROOT / "validation/prepare_test.py"])
+    run(["python3", ROOT / "validation/diagnostics_test.py"])
+    run(["python3", ROOT / "validation/runtime-source.py"])
     compiler = os.environ.get("CC", "clang")
     environment = dict(os.environ)
     # LeakSanitizer cannot enumerate threads in the restricted Codex container.
@@ -72,7 +75,9 @@ extern long sys_pthread_canceled(int);
 """)
         # Expand the actual x86_64 exported-wrapper macro for a Linux assembly
         # harness; verify cerror semantics as well as the raw futex functions.
-        sys_header = (ROOT / "src/external/xnu/libsyscall/custom/SYS.h").read_text()
+        sys_header = (ROOT / "src/external/xnu/gen/bsdsyscalls/SYS.h").read_text()
+        canonical = (ROOT / "src/external/xnu/libsyscall/custom/SYS.h").read_text()
+        assert sys_header == canonical, "Compiled syscall header differs from its canonical source"
         tail = sys_header[sys_header.index("#elif defined(__x86_64__)"):]
         begin = tail.index("\t#define UNIX_SYSCALL_NONAME")
         macro = tail[begin:tail.index("#else", begin)]
@@ -126,13 +131,17 @@ __darling_bsd_syscall:
         run([temporary / "network"])
 
         gl = (ROOT / "src/frameworks/OpenGL/OpenGL.c").read_text()
-        gl_code = 'static EGLDisplay display;\nstatic EGLConfig config;\n'
-        for tag in ("struct _CGLContextObj", "struct _CGLPixelFormatObj"):
-            begin = gl.index(tag)
+        gl_code = 'static EGLDisplay display;\nstatic EGLConfig config;\nstatic pthread_mutex_t g_displaysMutex = PTHREAD_MUTEX_INITIALIZER;\nstatic CGLContextObj g_contexts;\n'
+        for tag in ("struct _CGLContextObj", "struct _CGLPixelFormatObj", "struct _CGLWindow"):
+            begin = gl.index(tag + " {")
             gl_code += gl[begin:gl.index("};", begin) + 2] + "\n"
+        gl_code += 'static struct _CGLWindow* g_windows;\n'
         for signature in ("static inline int attribute_has_argument(", "static int attributes_count(",
-                          "CGLError CGLChoosePixelFormat(", "CGLError CGLDescribePixelFormat(",
-                          "void CGLReleasePixelFormat(", "CGLError CGLCreateContext("):
+                          "static CGLError choose_config(", "CGLError CGLChoosePixelFormat(", "CGLError CGLDescribePixelFormat(",
+                          "void CGLReleasePixelFormat(", "CGLContextObj CGLRetainContext(", "void CGLReleaseContext(",
+                          "CGLError CGLCreateContext(", "static CGLWindowRef create_window(", "CGLWindowRef CGLGetWindowForContext(",
+                          "CGL_EXPORT void CGLDestroyWindow(", "CGL_EXPORT CGLError CGLContextMakeCurrentAndAttachToWindow(",
+                          "CGLError CGLClearDrawable(", "CGLError CGLFlushDrawable(", "CGLError CGLSetParameter(", "CGLError CGLGetParameter("):
             gl_code += function(gl, signature)
         gl_code += gl[gl.index("static pthread_key_t current_context_key;"):gl.index("CGLError CGLSetFullScreen(")]
         write(temporary, "opengl-source.h", gl_code)

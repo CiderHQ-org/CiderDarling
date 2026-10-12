@@ -2,10 +2,12 @@
 """Read-only host/runtime diagnostics; graphics checks run in a child process."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import platform
 import re
+import resource
 import subprocess
 
 
@@ -35,9 +37,11 @@ def gpu_inventory(drm=Path("/sys/class/drm")):
         item = adapters.setdefault(pci, {"pci": pci, "vendor": vendor, "device": product,
             "vendor_name": {0x10de: "NVIDIA", 0x1002: "AMD", 0x8086: "Intel"}.get(vendor, "Other"),
             "driver": (device / "driver").resolve().name if (device / "driver").exists() else None,
-            "render_nodes": []})
+            "render_nodes": [], "card_nodes": []})
         if node.name.startswith("renderD"):
             item["render_nodes"].append("/dev/dri/" + node.name)
+        else:
+            item["card_nodes"].append("/dev/dri/" + node.name)
         capacity = read(device / "mem_info_vram_total")
         if capacity.isdecimal():
             item["dedicated_vram_bytes"] = int(capacity)
@@ -60,26 +64,68 @@ def cpu_inventory():
             "common_features": sorted(set.intersection(*flags)) if flags else []}
 
 
-def memory_inventory():
+def cgroup_inventory(root=Path("/sys/fs/cgroup")):
+    root = Path(root)
+    membership = next((line[3:] for line in read("/proc/self/cgroup").splitlines() if line.startswith("0::")), "/")
+    candidate = root / membership.lstrip("/")
+    current = candidate if candidate.is_dir() else root
+    memory_limits, memory_headroom, cpu_limits, pid_limits = [], [], [], []
+    directory = current
+    while directory.is_relative_to(root):
+        maximum = read(directory / "memory.max")
+        if maximum.isdecimal():
+            memory_limits.append(int(maximum))
+            usage = read(directory / "memory.current")
+            if usage.isdecimal(): memory_headroom.append(max(0, int(maximum) - int(usage)))
+        maximum = read(directory / "pids.max")
+        if maximum.isdecimal(): pid_limits.append(int(maximum))
+        quota = read(directory / "cpu.max").split()
+        if len(quota) == 2 and all(value.isdecimal() for value in quota) and int(quota[1]):
+            cpu_limits.append(int(quota[0]) / int(quota[1]))
+        if directory == root: break
+        directory = directory.parent
+    number = lambda name: int(value) if (value := read(current / name)).isdecimal() else None
+    return {"memory_limit_bytes": min(memory_limits) if memory_limits else None,
+            "memory_headroom_bytes": min(memory_headroom) if memory_headroom else None,
+            "memory_current_bytes": number("memory.current"),
+            "cpu_capacity": min(cpu_limits) if cpu_limits else None,
+            "pids_limit": min(pid_limits) if pid_limits else None, "pids_current": number("pids.current"),
+            "memory_events": read(current / "memory.events"), "cpu_stat": read(current / "cpu.stat")}
+
+
+def memory_inventory(cgroup=None):
     values = {}
     for line in read("/proc/meminfo").splitlines():
         key, _, value = line.partition(":")
         if key in ("MemTotal", "MemAvailable", "SwapTotal"):
             try: values[key + "_bytes"] = int(value.split()[0]) * 1024
             except (ValueError, IndexError): pass
-    limit = read("/sys/fs/cgroup/memory.max")
-    values["exposed_cgroup_limit_bytes"] = int(limit) if limit.isdecimal() else None
+    cgroup = cgroup or cgroup_inventory()
+    values["exposed_cgroup_limit_bytes"] = cgroup["memory_limit_bytes"]
+    available = values.get("MemAvailable_bytes", 0)
+    if cgroup["memory_headroom_bytes"] is not None:
+        available = min(available, cgroup["memory_headroom_bytes"])
+    values["effective_available_bytes"] = available
     return values
 
 
-def graphics_probe(program, vendor=None):
+def graphics_probe(program, vendor=None, *, device=None, frames=120, cycles=16, samples=0, affinity=None, memory_limit=None):
     environment = dict(os.environ)
     # This is a Linux host executable, so do not inherit guest loader shims.
     environment.pop("LD_PRELOAD", None)
     if vendor:
         environment["__EGL_VENDOR_LIBRARY_FILENAMES"] = str(vendor)
+    arguments = [str(program), "--frames", str(frames), "--cycles", str(cycles), "--samples", str(samples)]
+    if device: arguments += ["--device", str(device)]
+    def constrain_child():
+        if affinity is not None: os.sched_setaffinity(0, affinity)
+        if memory_limit is not None:
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            limit = min(memory_limit, hard) if hard != resource.RLIM_INFINITY else memory_limit
+            resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
     try:
-        result = subprocess.run([str(program)], capture_output=True, text=True, timeout=20, env=environment)
+        result = subprocess.run(arguments, capture_output=True, text=True, timeout=70, env=environment,
+                                preexec_fn=constrain_child if affinity is not None or memory_limit is not None else None)
         data = json.loads(result.stdout)
         if not isinstance(data, dict): raise ValueError("Unexpected probe result")
         data["exit_status"] = result.returncode
@@ -88,6 +134,12 @@ def graphics_probe(program, vendor=None):
         data["software_renderer"] = any(name in renderer for name in
             ("llvmpipe", "lavapipe", "softpipe", "swiftshader", "software rasterizer"))
         data["hardware_usable"] = data["ok"] and not data["software_renderer"]
+        nodes = (data.get("drm_render_node"), data.get("drm_device_node"))
+        for node in nodes:
+            if not node: continue
+            pci = read(Path("/sys/class/drm") / Path(node).resolve().name / "device/uevent")
+            address = next((line[14:] for line in pci.splitlines() if line.startswith("PCI_SLOT_NAME=")), None)
+            if address: data["pci"] = address; break
         if vendor: data["egl_vendor_manifest"] = str(vendor)
         if result.stderr: data["diagnostics"] = result.stderr[-2048:]
         return data
@@ -102,9 +154,18 @@ def main():
     parser.add_argument("--probe", type=Path, help="Path to the built cider-gl-probe executable")
     parser.add_argument("--egl-vendor", type=Path, help="Test one explicit EGL vendor manifest in the child only")
     parser.add_argument("--sysroot", type=Path, help="Darling runtime root containing usr/share/ciderdarling/runtime.json")
+    parser.add_argument("--gpu", help="Verify rendering on the GPU at this PCI address")
+    parser.add_argument("--frames", type=int, default=120, help="Offscreen draw/readback timing samples")
+    parser.add_argument("--cycles", type=int, default=16, help="Context/surface lifecycle repetitions")
+    parser.add_argument("--samples", type=int, default=0, help="Requested MSAA sample count")
     args = parser.parse_args()
+    if args.gpu and not args.graphics: parser.error("--gpu requires --graphics")
+    if not 1 <= args.frames <= 10000 or not 0 <= args.cycles <= 1000 or not 0 <= args.samples <= 64:
+        parser.error("Probe counts are outside their supported bounds")
     source = Path(__file__).resolve().parents[2]
     prefix = Path(__file__).resolve().parents[1]
+    if Path(__file__).resolve().parent.parent.name == "libexec":
+        prefix = Path(__file__).resolve().parents[2]
     runtime_files = [args.sysroot / "usr/share/ciderdarling/runtime.json"] if args.sysroot else [
         source / "build/cider-runtime.json",
         prefix / "libexec/darling/usr/share/ciderdarling/runtime.json",
@@ -119,9 +180,12 @@ def main():
         except ValueError:
             pass
     runtime_dir = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
-    report = {"schema_version": 1, "system": {"kernel": platform.release(),
+    cgroup = cgroup_inventory()
+    cpu = cpu_inventory()
+    cpu["effective_parallelism"] = min(cpu["allowed_cpus"] or 1, max(1, math.ceil(cgroup["cpu_capacity"]))) if cgroup["cpu_capacity"] is not None else cpu["allowed_cpus"]
+    report = {"schema_version": 2, "system": {"kernel": platform.release(),
         "distribution": read("/etc/os-release"), "flatpak": Path("/.flatpak-info").exists()},
-        "cpu": cpu_inventory(), "memory": memory_inventory(), "gpus": gpu_inventory(),
+        "cpu": cpu, "memory": memory_inventory(cgroup), "cgroup": cgroup, "gpus": gpu_inventory(),
         "desktop": {"x11_environment": bool(os.environ.get("DISPLAY")),
                     "wayland_environment": bool(os.environ.get("WAYLAND_DISPLAY"))},
         "audio": {"pipewire_socket_present": (runtime_dir / "pipewire-0").exists(),
@@ -131,8 +195,21 @@ def main():
         probes = [args.probe] if args.probe else [source / "build/tools/cider/cider-gl-probe",
                   prefix / "libexec/ciderdarling/cider-gl-probe"]
         executable = next((path for path in probes if path and path.is_file()), None)
-        report["graphics"] = graphics_probe(executable, args.egl_vendor) if executable else {
+        device = None
+        if args.gpu:
+            adapter = next((gpu for gpu in report["gpus"] if gpu["pci"] == args.gpu), None)
+            if not adapter: parser.error("Requested PCI GPU is absent from the DRM inventory")
+            nodes = adapter["render_nodes"] or adapter["card_nodes"]
+            if not nodes: parser.error("Requested GPU exposes no DRM device node")
+            device = nodes[0]
+        report["graphics"] = graphics_probe(executable, args.egl_vendor, device=device, frames=args.frames,
+                                            cycles=args.cycles, samples=args.samples) if executable else {
             "ok": False, "error": "Build cider-gl-probe or pass --probe PATH"}
+        if args.gpu:
+            graphics = report["graphics"]
+            graphics["requested_pci"] = args.gpu
+            graphics["selection_verified"] = graphics.get("pci") == args.gpu and graphics.get("device_matches_request") is True
+            if not graphics["selection_verified"]: graphics["ok"] = graphics["hardware_usable"] = False
     if args.json:
         print(json.dumps(report, indent=2))
     else:

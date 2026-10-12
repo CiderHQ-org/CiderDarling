@@ -1,4 +1,4 @@
---- a/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/network/connectx.h
+--- /dev/null
 +++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/network/connectx.h
 @@ -0,0 +1,16 @@
 +#ifndef CIDER_CONNECTX_H

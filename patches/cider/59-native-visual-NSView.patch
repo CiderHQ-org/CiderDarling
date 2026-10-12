@@ -1,0 +1,25 @@
+--- a/src/external/cocotron/AppKit/NSView.m
++++ b/src/external/cocotron/AppKit/NSView.m
+@@ -1,3 +1,4 @@
++#import <OpenGL/CGLInternal.h>
+ /* Copyright (c) 2006-2007 Christopher J. W. Lloyd
+                  2009-2010 Markus Hitter <mah@jump-ing.de>
+                  2020 Lubos Dolezel
+@@ -1151,7 +1152,7 @@
+         _window = window;
+ 
+         if (_layerContext) {
+-            [_layerContext setSubwindow: [_window _createSubWindowWithFrame: [self frame]]];
++            [_layerContext setSubwindow: [_window _createSubWindowWithFrame: [self frame] visualID:CGLGetNativeVisualID([_layerContext glContext])]];
+         }
+ 
+         [_subviews makeObjectsPerformSelector: _cmd withObject: window];
+@@ -1822,7 +1823,7 @@
+         _layerContext = [[CALayerContext alloc] initWithFrame: [self frame]];
+         [_layerContext setLayer: _layer];
+         if (_window) {
+-            [_layerContext setSubwindow: [_window _createSubWindowWithFrame: [self frame]]];
++            [_layerContext setSubwindow: [_window _createSubWindowWithFrame: [self frame] visualID:CGLGetNativeVisualID([_layerContext glContext])]];
+         }
+     }
+ }

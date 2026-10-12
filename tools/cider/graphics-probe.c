@@ -5,6 +5,11 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <pthread.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <limits.h>
+#include <time.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -45,11 +50,70 @@ static void *share_test(void *unused) {
     }
     return NULL;
 }
-int main(void) {
-    alarm(15);
+
+static const char* device_string(EGLDeviceEXT device, EGLint token) {
+    PFNEGLQUERYDEVICESTRINGEXTPROC query = (void*)eglGetProcAddress("eglQueryDeviceStringEXT");
+    if (!query) return NULL;
+    const char* extensions = query(device, EGL_EXTENSIONS);
+    if (!extensions) return NULL;
+    if (token == EGL_DRM_RENDER_NODE_FILE_EXT && !strstr(extensions, "EGL_EXT_device_drm_render_node")) return NULL;
+    if (token == EGL_DRM_DEVICE_FILE_EXT && !strstr(extensions, "EGL_EXT_device_drm")) return NULL;
+    return query(device, token);
+}
+static int adapter_path(const char* node, char output[PATH_MAX]) {
+    if (!node) return 0;
+    char resolved[PATH_MAX], path[PATH_MAX];
+    if (!realpath(node, resolved)) return 0;
+    const char* base = strrchr(resolved, '/');
+    if (!base) return 0;
+    if (snprintf(path, sizeof(path), "/sys/class/drm/%s/device", base+1) >= (int)sizeof(path)) return 0;
+    return realpath(path, output) != NULL;
+}
+static int device_matches(EGLDeviceEXT device, const char* requested) {
+    char expected[PATH_MAX], actual[PATH_MAX];
+    if (!adapter_path(requested, expected)) return 0;
+    const char* render = device_string(device, EGL_DRM_RENDER_NODE_FILE_EXT);
+    const char* primary = device_string(device, EGL_DRM_DEVICE_FILE_EXT);
+    return (adapter_path(render, actual) && !strcmp(actual, expected)) ||
+           (adapter_path(primary, actual) && !strcmp(actual, expected));
+}
+static uint64_t now_ns(void) {
+    struct timespec now; if (clock_gettime(CLOCK_MONOTONIC, &now)) return 0;
+    return (uint64_t)now.tv_sec * 1000000000ULL + now.tv_nsec;
+}
+static long rss_bytes(void) {
+    FILE* file = fopen("/proc/self/statm", "r"); unsigned long pages, resident;
+    if (!file) return -1;
+    int scanned = fscanf(file, "%lu %lu", &pages, &resident); fclose(file);
+    return scanned == 2 ? (long)resident * sysconf(_SC_PAGESIZE) : -1;
+}
+static int compare_ns(const void* first, const void* second) {
+    uint64_t a = *(const uint64_t*)first, b = *(const uint64_t*)second;
+    return (a > b) - (a < b);
+}
+static int number(const char* text, int maximum) {
+    char* end; long value = strtol(text, &end, 10);
+    return *text && !*end && value >= 0 && value <= maximum ? (int)value : -1;
+}
+int main(int argc, char** argv) {
+    int frames = 120, cycles = 16, samples = 0, depth = 24, stencil = 8;
+    const char* requested_device = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (i+1 >= argc) return failure("Missing probe option value");
+        const char* option = argv[i++]; const char* argument = argv[i];
+        if (!strcmp(option, "--device")) requested_device = argument;
+        else if (!strcmp(option, "--frames")) frames = number(argument, 10000);
+        else if (!strcmp(option, "--cycles")) cycles = number(argument, 1000);
+        else if (!strcmp(option, "--samples")) samples = number(argument, 64);
+        else if (!strcmp(option, "--depth")) depth = number(argument, 64);
+        else if (!strcmp(option, "--stencil")) stencil = number(argument, 16);
+        else return failure("Unknown probe option");
+    }
+    if (frames < 1 || cycles < 0 || samples < 0 || depth < 0 || stencil < 0) return failure("Invalid probe option value");
+    alarm(60);
     display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     const char *platform = "default";
-    if (display == EGL_NO_DISPLAY || !eglInitialize(display, NULL, NULL)) {
+    if (requested_device || display == EGL_NO_DISPLAY || !eglInitialize(display, NULL, NULL)) {
         // A terminal/CI run may have no display server. Device displays are
         // still useful for offscreen shader and resource-sharing checks.
         PFNEGLQUERYDEVICESEXTPROC query = (PFNEGLQUERYDEVICESEXTPROC)eglGetProcAddress("eglQueryDevicesEXT");
@@ -58,6 +122,7 @@ int main(void) {
         display = EGL_NO_DISPLAY;
         if (query && get && query(32, devices, &count)) {
             for (int i = 0; i < count && i < 32; i++) {
+                if (requested_device && !device_matches(devices[i], requested_device)) continue;
                 EGLDisplay candidate = get(EGL_PLATFORM_DEVICE_EXT, devices[i], NULL);
                 if (candidate != EGL_NO_DISPLAY && eglInitialize(candidate, NULL, NULL)) {
                     display = candidate; platform = "device"; break;
@@ -66,9 +131,15 @@ int main(void) {
         }
         if (display == EGL_NO_DISPLAY) return failure("EGL display initialization failed");
     }
+    EGLDeviceEXT selected_device = NULL;
+    PFNEGLQUERYDISPLAYATTRIBEXTPROC display_query = (void*)eglGetProcAddress("eglQueryDisplayAttribEXT");
+    EGLAttrib selected = 0;
+    if (display_query && display_query(display, EGL_DEVICE_EXT, &selected)) selected_device = (EGLDeviceEXT)selected;
+    if (requested_device && (!selected_device || !device_matches(selected_device, requested_device))) return failure("Cannot verify requested GPU identity");
     if (!eglBindAPI(EGL_OPENGL_API)) return failure("Desktop OpenGL API unavailable");
     EGLint attributes[] = {EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
-        EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE};
+        EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_DEPTH_SIZE, depth, EGL_STENCIL_SIZE, stencil,
+        EGL_SAMPLE_BUFFERS, samples ? 1 : 0, EGL_SAMPLES, samples, EGL_NONE};
     EGLint count;
     if (!eglChooseConfig(display, attributes, &config, 1, &count) || !count) return failure("No usable OpenGL framebuffer format");
     EGLint size[] = {EGL_WIDTH, 64, EGL_HEIGHT, 64, EGL_NONE};
@@ -97,13 +168,43 @@ int main(void) {
     if (shared_surface == EGL_NO_SURFACE || shared_context == EGL_NO_CONTEXT) return failure("Shared context creation failed");
     pthread_t thread;
     if (pthread_create(&thread, NULL, share_test, NULL) || pthread_join(thread, NULL) || !shared_ok) return failure("Cross-thread texture sharing failed");
+    uint64_t* timings = calloc((size_t)frames, sizeof(*timings));
+    if (!timings) return failure("Timing allocation failed");
+    for (int i = 0; i < frames; i++) {
+        uint64_t start = now_ns();
+        glDrawArrays(GL_TRIANGLES, 0, 3); glReadPixels(32, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        timings[i] = now_ns() - start;
+        if (glGetError() != GL_NO_ERROR || pixel[0] != 255 || pixel[1] || pixel[2]) return failure("Repeated rendering failed");
+    }
+    qsort(timings, (size_t)frames, sizeof(*timings), compare_ns);
+    long rss_before = rss_bytes();
+    for (int i = 0; i < cycles; i++) {
+        EGLSurface temporary_surface = eglCreatePbufferSurface(display, config, size);
+        EGLContext temporary_context = eglCreateContext(display, config, context, core);
+        if (temporary_surface == EGL_NO_SURFACE || temporary_context == EGL_NO_CONTEXT || !eglMakeCurrent(display, temporary_surface, temporary_surface, temporary_context)) return failure("Lifecycle context creation failed");
+        if (!glIsTexture(texture)) return failure("Lifecycle resource sharing failed");
+        if (!eglMakeCurrent(display, surface, surface, context)) return failure("Lifecycle context restoration failed");
+        if (!eglDestroyContext(display, temporary_context) || !eglDestroySurface(display, temporary_surface)) return failure("Lifecycle resource cleanup failed");
+    }
+    long rss_after = rss_bytes();
+    EGLint actual_depth = 0, actual_stencil = 0, actual_samples = 0;
+    eglGetConfigAttrib(display, config, EGL_DEPTH_SIZE, &actual_depth);
+    eglGetConfigAttrib(display, config, EGL_STENCIL_SIZE, &actual_stencil);
+    eglGetConfigAttrib(display, config, EGL_SAMPLES, &actual_samples);
     GLint max_texture, max_samples;
     glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture); glGetIntegerv(GL_MAX_SAMPLES, &max_samples);
     printf("{\"ok\":true,\"draw_readback\":true,\"shared_thread\":true,\"platform\":"); json_string(platform);
     printf(",\"vendor\":"); json_string((const char *)glGetString(GL_VENDOR));
     printf(",\"renderer\":"); json_string((const char *)glGetString(GL_RENDERER));
     printf(",\"version\":"); json_string((const char *)glGetString(GL_VERSION));
-    printf(",\"max_texture_size\":%d,\"max_samples\":%d}\n", max_texture, max_samples);
+    printf(",\"drm_render_node\":"); json_string(selected_device ? device_string(selected_device, EGL_DRM_RENDER_NODE_FILE_EXT) : NULL);
+    printf(",\"drm_device_node\":"); json_string(selected_device ? device_string(selected_device, EGL_DRM_DEVICE_FILE_EXT) : NULL);
+    printf(",\"requested_device\":"); json_string(requested_device);
+    printf(",\"device_matches_request\":%s", requested_device ? "true" : "null");
+    printf(",\"max_texture_size\":%d,\"max_samples\":%d,\"depth_bits\":%d,\"stencil_bits\":%d,\"samples\":%d", max_texture, max_samples, actual_depth, actual_stencil, actual_samples);
+    printf(",\"frames\":%d,\"lifecycle_cycles\":%d,\"rss_before_cycles\":%ld,\"rss_after_cycles\":%ld", frames, cycles, rss_before, rss_after);
+    printf(",\"draw_readback_latency_ns\":{\"p50\":%llu,\"p95\":%llu,\"p99\":%llu}}\n", (unsigned long long)timings[(frames*50+99)/100-1], (unsigned long long)timings[(frames*95+99)/100-1], (unsigned long long)timings[(frames*99+99)/100-1]);
+    free(timings);
     glDeleteTextures(1, &texture); glDeleteVertexArrays(1, &vao);
     glDeleteProgram(program); glDeleteShader(vertex); glDeleteShader(fragment);
     eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);

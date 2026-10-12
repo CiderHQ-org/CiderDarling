@@ -1,0 +1,11 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/include/conversion/network/recvmsg.h
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/include/conversion/network/recvmsg.h
+@@ -60,4 +60,7 @@
+ 
+ #define LINUX_BSD_CMSGHDR_SIZE_DIFFERENCE (sizeof(struct linux_cmsghdr) - sizeof(struct bsd_cmsghdr))
+ 
++long cider_cmsg_send(const void* input, size_t capacity, void** output, size_t* length);
++size_t cider_cmsg_receive(const void* input, size_t length, void* output, size_t capacity, int* flags);
++
+ #endif // DARLING_CONVERSION_NETWORK_RECVMSG
+\ No newline at end of file

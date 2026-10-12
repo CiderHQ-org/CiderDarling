@@ -1,12 +1,242 @@
 --- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c
 +++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c
-@@ -286,16 +286,15 @@
- 				// __simple_printf("Spawning a new thread, nevents=%d\n", (wq_event != NULL) ? wq_event->nevents : -1);
- 				wq_event_pending = wq_event;
+@@ -27,7 +27,16 @@
+ // much easier to include than libpthread's `internal.h`
+ #include <darling/mldr/elfcalls/dthreads.h>
  
+-#define WQ_MAX_THREADS	64
++#ifndef VARIANT_DYLD
++#include <pthread/tsd_private.h>
++#define CIDER_TRACE_THREAD() _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_PTHREAD_SELF)
++#include <cider_trace.h>
++#else
++#define CIDER_TRACE_BEGIN() 0
++#define CIDER_TRACE_END(category, start, value) ((void)(start))
++#endif
++#define FUTEX_PRIVATE_FLAG 128
++#define WQ_MAX_THREADS 16384
+ 
+ #define WQOPS_QUEUE_ADD 1
+ #define WQOPS_QUEUE_REMOVE 2
+@@ -60,11 +69,7 @@
+ 
+ #define WORKQ_EXIT_THREAD_NKEVENT (-1)
+ 
+-static int workq_sem = WQ_MAX_THREADS; // max 64 threads in use
+-static os_unfair_lock workq_parked_lock = OS_UNFAIR_LOCK_INIT;
+-// static int workq_parked_threads = 0; // num spawned, but unused threads
+-static int workq_parked[WQ_MAX_THREADS];
+-static int workq_parked_prio[WQ_MAX_THREADS];
++static int workq_sem, workq_limit, workq_parked_lock;
+ 
+ TAILQ_HEAD(tailhead, parked_thread) workq_parked_head = TAILQ_HEAD_INITIALIZER(workq_parked_head);
+ 
+@@ -75,14 +80,17 @@
+ 	TAILQ_ENTRY(parked_thread) entries;
+ };
+ 
+-static void list_add(struct parked_thread* head, struct parked_thread* item);
+-static void list_remove(struct parked_thread* head, struct parked_thread* item);
+-
++
++
++
++#ifndef _STRUCT_TIMESPEC
++#define _STRUCT_TIMESPEC
+ struct timespec
+ {
+ 	long tv_sec;
+ 	long tv_nsec;
+ };
++#endif
+ 
+ void __attribute__((weak)) os_unfair_lock_unlock(os_unfair_lock_t lock) {}
+ void __attribute__((weak)) os_unfair_lock_lock(os_unfair_lock_t lock) {}
+@@ -92,8 +100,46 @@
+ 
+ static int priority_to_class(int prio);
+ 
+-// This is horrible, but it may work
+-static struct wq_kevent_data* wq_event_pending = NULL;
++/* Completion belongs to the worker handling that event, never a global singleton. */
++static struct wq_kevent_data* workq_events;
++static void workq_lock(void) {
++    while (__atomic_exchange_n(&workq_parked_lock, 1, __ATOMIC_ACQUIRE))
++        LINUX_SYSCALL(__NR_futex, &workq_parked_lock, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 1, NULL, NULL, 0);
++}
++static void workq_unlock(void) {
++    __atomic_store_n(&workq_parked_lock, 0, __ATOMIC_RELEASE);
++    LINUX_SYSCALL(__NR_futex, &workq_parked_lock, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1, NULL, NULL, 0);
++}
++void cider_workq_bind_event(struct wq_kevent_data* event, int thread_port) {
++    if (!event) return;
++    workq_lock();
++    event->owner = thread_port;
++    event->next = workq_events;
++    workq_events = event;
++    workq_unlock();
++}
++static struct wq_kevent_data* workq_take_event(int thread_port) {
++    workq_lock();
++    struct wq_kevent_data** position = &workq_events;
++    while (*position && (*position)->owner != thread_port) position = &(*position)->next;
++    struct wq_kevent_data* event = *position;
++    if (event) *position = event->next;
++    workq_unlock();
++    return event;
++}
++
++static int workq_complete_event(int owner, const struct kevent_qos_s* events, int count) {
++    struct wq_kevent_data* event = workq_take_event(owner);
++    if (!event) return -EINVAL;
++    if (count < 0 || count > event->capacity || (count && !events)) event->nevents = -EINVAL;
++    else {
++        if (count) memmove(event->events, events, (size_t)count * sizeof(*events));
++        event->nevents = count;
++    }
++    /* The caller owns this stack object; never touch it after releasing it. */
++    sem_up(&event->sem);
++    return 0;
++}
+ 
+ static void rpc_guard(int fd) {
+ 	guard_entry_options_t options;
+@@ -142,19 +188,8 @@
+ 			
+ 			// __simple_printf("kevent return, obj=%p, nkevents=%d\n", wq_event, nkevents);
+ 
+-			if (wq_event_pending != NULL)
+-			{
+-				int* sem;
+-				if (nkevents > 0)
+-					memmove(wq_event_pending->events, keventlist, nkevents * sizeof(struct kevent_qos_s));
+-				wq_event_pending->nevents = nkevents;
+-
+-				sem = &wq_event_pending->sem;
+-				wq_event_pending = NULL;
+-				sem_up(sem);
+-			}
+-			else
+-				__simple_printf("wq_event is NULL, something is going to get stuck forever\n");
++            int thread_port = _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_MACH_THREAD_SELF);
++            if (workq_complete_event(thread_port, keventlist, nkevents) < 0) return -EINVAL;
+ 		}
+ 		case WQOPS_THREAD_RETURN:
+ 		{
+@@ -162,11 +197,11 @@
+ 			// and can be either recycled or terminated
+ 
+ 			int thread_self;
+-			struct parked_thread me;
++			struct parked_thread me = {0};
+ 			dthread_t dthread;
+ 			bool terminating = false;
+ 
+-			os_unfair_lock_lock(&workq_parked_lock);
++			workq_lock();
+ 
+ 			// Semaphore locked state (wait for wakeup)
+ 			me.sem = 0;
+@@ -185,7 +220,7 @@
+ 			// Decrease the amount of running threads
+ 			sem_up(&workq_sem);
+ 
+-			os_unfair_lock_unlock(&workq_parked_lock);
++			workq_unlock();
+ 
+ 			// Wait until someone calls WQOPS_QUEUE_REQTHREADS
+ 			// and wakes us up
+@@ -193,17 +228,17 @@
+ 			{
+ 				// Make sure we haven't just been woken up before locking the queue
+ 				// and remove us from the queue if not.
+-				os_unfair_lock_lock(&workq_parked_lock);
++				workq_lock();
+ 	
+-				if (me.sem > 0)
++				if (__atomic_load_n(&me.sem, __ATOMIC_ACQUIRE) > 0)
+ 				{
+-					os_unfair_lock_unlock(&workq_parked_lock);
++					workq_unlock();
+ 					goto wakeup;
+ 				}
+ 
+ 				TAILQ_REMOVE(&workq_parked_head, &me, entries);
+ 
+-				os_unfair_lock_unlock(&workq_parked_lock);
++				workq_unlock();
+ 
+ 				terminating = true;
+ 
+@@ -214,14 +249,14 @@
+ wakeup: // we actually want to go back into the thread to do work
+ 			// __simple_printf("Thread %d woken up, prio=%d\n", thread_self, me.flags & WQ_FLAG_THREAD_PRIOMASK);
+ 
+-			if (me.event)
+-				wq_event_pending = me.event;
++
+ 
+ resume_thread: // we want the thread to resume, but it might be just to die
+ 			// reset stack and call entry point again with WQ_FLAG_THREAD_REUSE
+ 			thread_self = _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_MACH_THREAD_SELF);
+ 			dthread = _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_PTHREAD_SELF);
+ 
++            if (!terminating) cider_workq_bind_event(me.event, thread_self);
+ 			wqueue_entry_point_asm_jump(dthread, thread_self, dthread->stackbottom, 
+ 				(!terminating && me.event) ? me.event->events : NULL, 
+ 				me.flags | WQ_FLAG_THREAD_REUSE,
+@@ -252,12 +287,25 @@
+ 			
+ 			// __simple_printf("Thread requested with prio %d\n", prio & WQ_FLAG_THREAD_PRIOMASK);
+ 
+-			for (i = 0; i < affinity; i++)
++            extern int cider_available_cpus(void);
++            workq_lock();
++            if (!workq_limit) {
++                int cpus = cider_available_cpus();
++                /* Let libdispatch use all available logical CPUs, with headroom
++                 * for blocked/overcommit workers and a finite resource ceiling. */
++                workq_limit = cpus > WQ_MAX_THREADS / 4 ? WQ_MAX_THREADS : cpus * 4;
++                if (workq_limit < 64) workq_limit = 64;
++                workq_sem = workq_limit;
++            }
++            int limit = workq_limit;
++            workq_unlock();
++            if (affinity < 0 || affinity > limit) return -EINVAL;
++            for (i = 0; i < affinity; i++)
+ 			{
+ 				// Increase the amount of running threads
+-				sem_down(&workq_sem, -1);
+-
+-				os_unfair_lock_lock(&workq_parked_lock);
++				if (!sem_down(&workq_sem, 0)) return -EAGAIN;
++
++				workq_lock();
+ 
+ 				if (workq_parked_head.tqh_first != NULL)
+ 				{
+@@ -276,26 +324,25 @@
+ 
+ 					// Resume the thread
+ 					sem_up(&thread->sem);
+-					os_unfair_lock_unlock(&workq_parked_lock);
++					workq_unlock();
+ 
+ 					continue;
+ 				}
+ 
+-				os_unfair_lock_unlock(&workq_parked_lock);
++				workq_unlock();
+ 
+ 				// __simple_printf("Spawning a new thread, nevents=%d\n", (wq_event != NULL) ? wq_event->nevents : -1);
+-				wq_event_pending = wq_event;
+-
 -				__darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
+-						(wq_event != NULL) ? wq_event->events : NULL, flags,
++	
++
 +				void *created = __darling_thread_create(512*1024, pthread_obj_size, wqueue_entry_point_wrapper, 0,
- 						(wq_event != NULL) ? wq_event->events : NULL, flags,
++						wq_event, flags,
  						(wq_event != NULL) ? wq_event->nevents : 0,
  						&callbacks, NULL);
  
@@ -22,3 +252,75 @@
  			}
  			return 0;
  		}
+@@ -320,36 +367,41 @@
+ #endif
+ }
+ 
+-int sem_down(int* sem, int timeout)
+-{
+-	int result;
+-	struct timespec ts = { timeout, 0 };
+-
+-try_again:
+-	result = __sync_add_and_fetch(sem, -1);
+-	if (result < 0)
+-	{
+-		*sem = -1;
+-		result = __linux_futex(sem, FUTEX_WAIT, -1, (timeout != -1) ? &ts : NULL, 0, 0);
+-
+-		if (result == -1)
+-			return 0;
+-
+-		goto try_again;
+-	}
+-
+-	return 1;
+-}
+-
+-void sem_up(int* sem)
+-{
+-	int result;
+-	result = __sync_add_and_fetch(sem, 1);
+-	if (result == 0)
+-	{
+-		*sem = 1;
+-		__linux_futex(sem, FUTEX_WAKE, 1, NULL, 0, 0);
+-	}
++static int64_t workq_now_ns(void) {
++    struct timespec now;
++    if (LINUX_SYSCALL(__NR_clock_gettime, 1 /* CLOCK_MONOTONIC */, &now) < 0) return -1;
++    return (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec;
++}
++int sem_down(int* sem, int timeout) {
++    uint64_t started = CIDER_TRACE_BEGIN();
++    int64_t deadline = -1;
++    if (timeout >= 0) {
++        int64_t now = workq_now_ns();
++        if (now < 0) { CIDER_TRACE_END("workqueue_wait_timeout", started, timeout); return 0; }
++        deadline = now + (int64_t)timeout * 1000000000LL;
++    }
++    for (;;) {
++        int value = __atomic_load_n(sem, __ATOMIC_ACQUIRE);
++        while (value > 0) {
++            if (__atomic_compare_exchange_n(sem, &value, value - 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) { CIDER_TRACE_END("workqueue_wait", started, timeout); return 1; }
++        }
++        struct timespec remaining, *wait = NULL;
++        if (deadline >= 0) {
++            int64_t now = workq_now_ns();
++            if (now < 0 || now >= deadline) { CIDER_TRACE_END("workqueue_wait_timeout", started, timeout); return 0; }
++            int64_t ns = deadline - now;
++            remaining.tv_sec = ns / 1000000000LL;
++            remaining.tv_nsec = ns % 1000000000LL;
++            wait = &remaining;
++        }
++        long result = LINUX_SYSCALL(__NR_futex, sem, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 0, wait, NULL, 0);
++        /* A signal, changed value, or spurious wake does not consume a token. */
++        if (result < 0 && result != -4 /* EINTR */ && result != -11 /* EAGAIN */) { CIDER_TRACE_END("workqueue_wait_timeout", started, timeout); return 0; }
++    }
++}
++void sem_up(int* sem) {
++    __atomic_fetch_add(sem, 1, __ATOMIC_RELEASE);
++    LINUX_SYSCALL(__NR_futex, sem, FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1, NULL, NULL, 0);
+ }
+ 
+ #define __PTHREAD_PRIORITY_CBIT_USER_INTERACTIVE 0x20

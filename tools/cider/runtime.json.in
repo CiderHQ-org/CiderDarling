@@ -14,6 +14,11 @@
     "workqueue_stack_reset_x86_64", "display_physical_dimensions",
     "appkit_event_queue_wakeup", "quartz_context_restoration",
     "cgl_pixel_format_termination", "cgl_core_profile_selection",
-    "cgl_failed_switch_reporting", "portable_string_optimization"
+    "cgl_failed_switch_reporting", "portable_string_optimization",
+    "cpu_cpuid_integer_abi", "cpu_affinity_cgroup_capacity", "libdispatch_activecpu",
+    "workqueue_atomic_semaphores", "workqueue_event_ownership", "psynch_error_abi",
+    "cgl_framebuffer_negotiation", "cgl_drawable_lifecycle", "cgl_thread_binding_lifetime",
+    "bounded_numeric_timing_traces", "safe_private_runtime_staging",
+    "cgl_native_visual_matching", "x11_colormap_lifetime", "cgl_context_swap_interval"
   ]
 }

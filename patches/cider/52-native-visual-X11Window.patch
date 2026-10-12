@@ -1,0 +1,11 @@
+--- a/src/external/cocotron/AppKit/X11.backend/X11Window.h
++++ b/src/external/cocotron/AppKit/X11.backend/X11Window.h
+@@ -32,6 +32,8 @@
+     int _level; // TODO: care about this value
+     Display *_display;
+     XVisualInfo *_visualInfo;
++    CGLPixelFormatObj _cglPixelFormat;
++    Colormap _colormap;
+     Window _window;
+     CGLContextObj _cglContext;
+     CGLWindowRef _cglWindow;

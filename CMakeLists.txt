@@ -66,6 +66,7 @@ SET(CMAKE_SKIP_RPATH TRUE)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "The version of macOS we're simulating")
 
 project(darling)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src/cider")
 
 option(CIDER_APPLY_PATCHES "Apply the pinned CiderDarling dependency patch series" ON)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -281,9 +282,10 @@ InstallSymlink(/Volumes/SystemRoot/usr/share/zoneinfo ${CMAKE_INSTALL_PREFIX}/li
 
 install(DIRECTORY DESTINATION libexec/darling/Library/Preferences)
 
-if(NOT DEBIAN_PACKAGING)
-	install(CODE "execute_process(COMMAND bash ${DARLING_TOP_DIRECTORY}/tools/shutdown-user.sh)")
-endif(NOT DEBIAN_PACKAGING)
+option(CIDER_SHUTDOWN_ON_INSTALL "Stop running system Darling instances during a live installation" OFF)
+if(NOT DEBIAN_PACKAGING AND CIDER_SHUTDOWN_ON_INSTALL)
+	install(CODE "if(NOT DEFINED ENV{DESTDIR})\nexecute_process(COMMAND bash ${DARLING_TOP_DIRECTORY}/tools/shutdown-user.sh)\nendif()")
+endif()
 
 add_custom_target(uninstall
 	COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/uninstall

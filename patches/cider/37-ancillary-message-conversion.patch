@@ -1,0 +1,100 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/conversion/network/recvmsg.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/conversion/network/recvmsg.c
+@@ -23,3 +23,97 @@
+ 			return level;
+ 	}
+ }
++
++#include <sys/errno.h>
++#include <darling/emulation/common/base.h>
++#include <darling/emulation/conversion/network/duct.h>
++#include <darling/emulation/linux_premigration/linux-syscalls/linux.h>
++extern void* malloc(size_t);
++extern void free(void*);
++extern void* memcpy(void*, const void*, size_t);
++extern void* memset(void*, int, size_t);
++
++long cider_cmsg_send(const void* input, size_t capacity, void** output, size_t* length) {
++    *output = NULL; *length = 0;
++    if (!capacity) return 0;
++    if (!input) return -EFAULT;
++    size_t position = 0, needed = 0;
++    /* First validate every message; never submit uninitialized trailing bytes. */
++    while (capacity - position >= sizeof(struct bsd_cmsghdr)) {
++        struct bsd_cmsghdr header;
++        memcpy(&header, (const char*)input + position, sizeof(header));
++        if (header.cmsg_len < BSD_CMSG_LEN(0) || header.cmsg_len > capacity - position) return -EINVAL;
++        size_t data = header.cmsg_len - BSD_CMSG_LEN(0);
++        if (header.cmsg_level != BSD_SOL_SOCKET || header.cmsg_type != 1) return -ENOTSUP;
++        if (!data || data % sizeof(int)) return -EINVAL;
++        size_t space = LINUX_CMSG_SPACE(data);
++        if (needed > (size_t)-1 - space) return -EINVAL;
++        needed += space;
++        size_t advance = BSD_CMSG_ALIGN(header.cmsg_len);
++        if (advance > capacity - position) { position = capacity; break; }
++        position += advance;
++    }
++    if (!needed) return -EINVAL;
++    char* converted = malloc(needed);
++    if (!converted) return -ENOMEM;
++    memset(converted, 0, needed);
++    position = 0; size_t destination = 0;
++    while (capacity - position >= sizeof(struct bsd_cmsghdr)) {
++        struct bsd_cmsghdr header; memcpy(&header, (const char*)input + position, sizeof(header));
++        size_t data = header.cmsg_len - BSD_CMSG_LEN(0);
++        struct linux_cmsghdr* target = (void*)(converted + destination);
++        target->cmsg_len = LINUX_CMSG_LEN(data);
++        target->cmsg_level = LINUX_SOL_SOCKET; target->cmsg_type = 1;
++        memcpy(target->cmsg_data, (const char*)input + position + BSD_CMSG_LEN(0), data);
++        destination += LINUX_CMSG_SPACE(data);
++        size_t advance = BSD_CMSG_ALIGN(header.cmsg_len);
++        if (advance > capacity - position) break;
++        position += advance;
++    }
++    *output = converted; *length = needed;
++    return 0;
++}
++static void cider_close_rights(const unsigned char* data, size_t first, size_t count) {
++    for (size_t i = first; i < count; i++) {
++        int fd; memcpy(&fd, data + i * sizeof(fd), sizeof(fd));
++        LINUX_SYSCALL(__NR_close, fd);
++    }
++}
++size_t cider_cmsg_receive(const void* input, size_t length, void* output, size_t capacity, int* flags) {
++    size_t position = 0, used = 0;
++    if (!output) capacity = 0;
++    while (length - position >= sizeof(struct linux_cmsghdr)) {
++        struct linux_cmsghdr header; memcpy(&header, (const char*)input + position, sizeof(header));
++        if (header.cmsg_len < LINUX_CMSG_LEN(0) || header.cmsg_len > length - position) {
++            *flags |= BSD_MSG_CTRUNC; break;
++        }
++        const unsigned char* data = (const void*)((const char*)input + position + LINUX_CMSG_LEN(0));
++        size_t payload = header.cmsg_len - LINUX_CMSG_LEN(0), copied = payload;
++        int type = 0;
++        if (header.cmsg_level == LINUX_SOL_SOCKET && header.cmsg_type == 1) type = 1;
++        else { *flags |= BSD_MSG_CTRUNC; copied = 0; }
++        size_t available = capacity - used;
++        if (type == 1) {
++            size_t count = payload / sizeof(int);
++            size_t fit = available >= BSD_CMSG_LEN(0) ? (available - BSD_CMSG_LEN(0)) / sizeof(int) : 0;
++            if (fit > count) fit = count;
++            if (fit != count || payload % sizeof(int)) *flags |= BSD_MSG_CTRUNC;
++            cider_close_rights(data, fit, count);
++            copied = fit * sizeof(int);
++        }
++        if (copied && type) {
++            struct bsd_cmsghdr target = {BSD_CMSG_LEN(copied), BSD_SOL_SOCKET, type};
++            memcpy((char*)output + used, &target, sizeof(target));
++            memcpy((char*)output + used + BSD_CMSG_LEN(0), data, copied);
++            size_t space = BSD_CMSG_SPACE(copied);
++            if (space > available) space = available;
++            size_t written = BSD_CMSG_LEN(copied);
++            if (space > written) memset((char*)output + used + written, 0, space - written);
++            used += space;
++        }
++        size_t advance = LINUX_CMSG_ALIGN(header.cmsg_len);
++        if (advance > length - position) break;
++        position += advance;
++    }
++    return used;
++}

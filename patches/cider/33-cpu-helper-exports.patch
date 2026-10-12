@@ -1,0 +1,10 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/helper/misc/sysctl_hw.h
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/helper/misc/sysctl_hw.h
+@@ -5,4 +5,7 @@
+ 
+ extern const struct known_sysctl sysctls_hw[];
+ 
++int cider_available_cpus(void);
++int cider_physical_cpus(void);
++
+ #endif // _SYSCTL_HW_H

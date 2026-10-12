@@ -1,0 +1,13 @@
+--- a/src/external/cocotron/AppKit/X11.backend/X11SubWindow.h
++++ b/src/external/cocotron/AppKit/X11.backend/X11SubWindow.h
+@@ -7,8 +7,10 @@
+     X11Window *_parent;
+     Display *_display;
+     Window _window;
++    Colormap _colormap;
+ }
+ 
+ - initWithParentWindow: (X11Window *) parent frame: (CGRect) frame;
++- initWithParentWindow: (X11Window *) parent frame: (CGRect) frame visualID: (unsigned long) visualID;
+ 
+ @end

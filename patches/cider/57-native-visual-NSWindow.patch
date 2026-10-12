@@ -1,0 +1,10 @@
+--- a/src/external/cocotron/AppKit/include/AppKit/NSWindow.h
++++ b/src/external/cocotron/AppKit/include/AppKit/NSWindow.h
+@@ -619,6 +619,7 @@
+ - (void) windowWillClose: (NSNotification *) note;
+ 
+ - (CGSubWindow *) _createSubWindowWithFrame: (CGRect) frame;
++- (CGSubWindow *) _createSubWindowWithFrame: (CGRect) frame visualID: (unsigned long) visualID;
+ 
+ @end
+ 

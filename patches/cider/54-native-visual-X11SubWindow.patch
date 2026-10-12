@@ -1,0 +1,65 @@
+--- a/src/external/cocotron/AppKit/X11.backend/X11SubWindow.m
++++ b/src/external/cocotron/AppKit/X11.backend/X11SubWindow.m
+@@ -1,4 +1,5 @@
+ #import "X11SubWindow.h"
++#import <X11/Xutil.h>
+ #import "X11Display.h"
+ #import "X11Window.h"
+ 
+@@ -15,23 +16,33 @@
+ }
+ 
+ - (id) initWithParentWindow: (X11Window *) parent frame: (CGRect) frame {
++    return [self initWithParentWindow:parent frame:frame visualID:0];
++}
++- (id) initWithParentWindow: (X11Window *) parent frame: (CGRect) frame visualID: (unsigned long) visualID {
+     _parent = parent;
+-    frame = [self convertFrame: frame];
+-
+-    _display = [(X11Display *) [NSDisplay currentDisplay] display];
+-
+-    _window = XCreateSimpleWindow(_display, [parent windowHandle],
+-                                  frame.origin.x, frame.origin.y,
+-                                  frame.size.width, frame.size.height, 0, 0,
+-                                  0 /* border_width, border, background */
+-    );
+-
+-    [self show];
+-    return self;
++    frame = [self convertFrame:frame];
++    _display = [(X11Display*)[NSDisplay currentDisplay] display];
++    unsigned width = frame.size.width > 0 ? (unsigned)frame.size.width : 1;
++    unsigned height = frame.size.height > 0 ? (unsigned)frame.size.height : 1;
++    if (visualID) {
++        XVisualInfo desired = {.visualid = visualID}; int count = 0;
++        XVisualInfo* visual = XGetVisualInfo(_display, VisualIDMask, &desired, &count);
++        if (!visual || !count) { if (visual) XFree(visual); [self release]; return nil; }
++        _colormap = XCreateColormap(_display, [parent windowHandle], visual->visual, AllocNone);
++        if (!_colormap) { XFree(visual); [self release]; return nil; }
++        XSetWindowAttributes attributes = {.colormap=_colormap,.border_pixel=0,.background_pixel=0};
++        _window = XCreateWindow(_display, [parent windowHandle], frame.origin.x, frame.origin.y,
++            width, height, 0, visual->depth, InputOutput, visual->visual,
++            CWColormap | CWBorderPixel | CWBackPixel, &attributes);
++        XFree(visual);
++    } else _window = XCreateSimpleWindow(_display, [parent windowHandle], frame.origin.x, frame.origin.y, width, height, 0, 0, 0);
++    if (!_window) { [self release]; return nil; }
++    [self show]; return self;
+ }
+ 
+ - (void) dealloc {
+-    XDestroyWindow(_display, _window);
++    if (_window) XDestroyWindow(_display, _window);
++    if (_colormap) XFreeColormap(_display, _colormap);
+     [super dealloc];
+ }
+ 
+@@ -51,7 +62,8 @@
+     frame = [self convertFrame: frame];
+ 
+     XMoveResizeWindow(_display, _window, frame.origin.x, frame.origin.y,
+-                      frame.size.width, frame.size.height);
++                      frame.size.width > 0 ? frame.size.width : 1,
++                      frame.size.height > 0 ? frame.size.height : 1);
+ }
+ 
+ @end

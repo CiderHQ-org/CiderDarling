@@ -1,4 +1,4 @@
---- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c
+--- /dev/null
 +++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c
 @@ -0,0 +1,40 @@
 +/* Basic Darwin connectx: bind, connect, and optional initial data.

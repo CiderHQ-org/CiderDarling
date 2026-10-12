@@ -61,9 +61,9 @@
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/bsdthread_register.c",
       "before": "dd6059651c9d7544e1df1d4054defaa7c75aef38907d6165877485ce41b9a355",
-      "after": "3e9708bdd292095c6cec6789a0049ee670e5e2a0ca8421ece909694cb4b2e71c",
+      "after": "83d4bb2a7d8829552efb37d78e10f664c10ec4d9b82e0d55d7a9ab4ca3f7823a",
       "patch": "09-workqueue-stack-reset.patch",
-      "patch_sha256": "4b84a2756d21a058f97581ed076d680e7a95016541a9023404249cdb792021d5"
+      "patch_sha256": "b9f665991164fd08ec225e0917cce50df0a5a7ec093ffbc0b75ad17e52ac2afa"
     },
     {
       "path": "src/external/cocotron/CoreGraphics/CGDirectDisplay.m",
@@ -76,15 +76,15 @@
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.c",
       "before": "74487ac3d2e8bea8e5dda84d71518afda5da1e01d1add5e8b3cbb23b12c6e324",
       "patch": "11-workqueue-creation-failure.patch",
-      "after": "3f726c69ee1377beb34aec4552fbeda327bf2779978756cad8a6ae97349a256f",
-      "patch_sha256": "5925f15ec17244f388e1290fb41c15d8e4e9a3ceabb8a3de7c30f7c3fb018f2f"
+      "after": "1284a217bca228eb43541927a93739c4a6ca97afa8fa69353872ae76119e3208",
+      "patch_sha256": "8c7596284b32251744f577a7fd126e9f07774c86c538ef2dcef8a4ffdc88c8d5"
     },
     {
       "path": "src/external/cocotron/QuartzCore/CALayerContext.m",
       "before": "96775cd27114aec34a0e9f5261db72b1d3efd827ae71a7e27a06b1259b5e2995",
       "patch": "12-quartz-restore-context.patch",
-      "after": "f579ebd3a41241be8f96b22aaf3724e045846f343155035b3c8646f85879c5a7",
-      "patch_sha256": "363770c9d4507b269734ebd64308a1dbcff91bd625f5a38ed4b4991a3cbbf70e"
+      "after": "5d904c81daae6be504ca4be8a48bd63b5670657286d40da1b813c39b14c71037",
+      "patch_sha256": "0dfe3061abbb4778b227df94314f5bdfda5d85925bb9c65af1c05de77973d83e"
     },
     {
       "path": "src/external/libpthread/src/pthread.c",
@@ -175,14 +175,14 @@
       "before": null,
       "patch": "25-connectx-header.patch",
       "after": "fe3a52d357469dcf92173a4cf654cf36defa46dbd8eb11b17ddb19d5b2f89772",
-      "patch_sha256": "6c31eb0662811b52ad73fe856c35b1976165ea1826d53b4be97cf82e109405a3"
+      "patch_sha256": "19592768dcaceabaa7b7d73d49fcf4607a219380f26a01aefdbf8137b32d16d7"
     },
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/connectx.c",
       "before": null,
       "patch": "26-connectx-basic.patch",
       "after": "d7b80c6d16b2c77f0ede6922f03055f08bcff5355f094ed859a3ec9127a9d7fd",
-      "patch_sha256": "115eccdc834c0bf32961dcbdab34122097776d2c41fda32f9fa920e7c9239957"
+      "patch_sha256": "f6caf5c12ac62acc85d9c7c98d92ba705041a439e031c5c537da28331523d418"
     },
     {
       "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/CMakeLists.txt",
@@ -211,6 +211,209 @@
       "patch": "30-unwind-linker-compatibility.patch",
       "after": "08436a97cc5edf767ad8be01bdb5556c22825ef51721fef2001bec1494b184c7",
       "patch_sha256": "06f4dc245c1d38beca36f5d464045c4c9ebba96c5e47e2d2887c4d83c7107623"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_machdep.c",
+      "patch": "31-cpu-identification.patch",
+      "before": "0f4c61779e126d7ad1d9d2e350ec6e939aaacbaae1f48bb756fa1e16cdaab92e",
+      "after": "70be1c0536f37a8d717480bd6c682e7f90498b72a3cccd5657210fa4726bfcbc",
+      "patch_sha256": "4a6f8f783d36cb95fd864874e768342b423c18389d2093c1398ada68e1eb35f9"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_hw.c",
+      "patch": "32-cpu-affinity-topology.patch",
+      "before": "a0930c53a9df8f3f812f42598e8ec5ab6c2a90fb7eaa204b5cb0e24789a051e1",
+      "after": "d2730bdf23a701ba22ab21c5552a44aaedfc74916d24c606d6ee38ce1720e5f1",
+      "patch_sha256": "977cbfe1bd76b7ede1c21bc1e734ffb1d2d57ee04ff503380d1828b382549c35"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/helper/misc/sysctl_hw.h",
+      "patch": "33-cpu-helper-exports.patch",
+      "before": "02e5a2ea825e0592f83e9dcc0ecfdcc674ac9874930e3c023ac802f6a2639a0e",
+      "after": "44740d203d466c74b268898c444d11efe3bf80524a4f8db03f17597ed0ebc8f0",
+      "patch_sha256": "8a43c12901fdfcdfdeb1e02db1558ba70563d0f7dd5fa363ce0e90dd6b934dfc"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/xnu_syscall/bsd/impl/bsdthread/workq_kernreturn.h",
+      "patch": "34-workqueue-event-ownership.patch",
+      "before": "d759d09b432336c2d80a67e1401fd0781c2ed79f011225a5aa1ffcda5857fe43",
+      "after": "29c86c7306e00e742bf86cdc2e49376f669ad029f8726228933c174b2e6fb6f7",
+      "patch_sha256": "fedb98a81f269542da8f23ed088a6ed00a76195f7acf9a99b21eb0cd888d8802"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/kqueue/kevent_qos.c",
+      "patch": "35-kevent-workqueue-bounds.patch",
+      "before": "c718ee0632f39555e32b780cee007e1bb88407b9669fa534b8254b0014f21fb4",
+      "after": "8a9d02570adc9b79b502b69734f33f4dded67461003d94a679f24fee9f0371db",
+      "patch_sha256": "67a7bad07c375fd00256e8eee4e21936a13e5ace08ff470abfb3cf62295ff147"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/include/conversion/network/recvmsg.h",
+      "patch": "36-ancillary-message-layout.patch",
+      "before": "b94c0d25f147ce37354af67a59229fa3fcbd7044a4435882728280c33288ed7c",
+      "after": "bcc16d946b1044f5edf97b514d15d2c0c3d55aa61c14be07dc499d32a398fb06",
+      "patch_sha256": "6afb7026e36fb799c1e7afeb9fd44b737f7ae0907c3ec1d7b83de3d4734c060e"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/conversion/network/recvmsg.c",
+      "patch": "37-ancillary-message-conversion.patch",
+      "before": "4dd05a2fd470e9f3e924645a9e6b4be164d75132955641c3af15e841adaed092",
+      "after": "806e744f774a63b22f23337ead95aa8120a2bba82c1c7493b7a19e22edcacfc0",
+      "patch_sha256": "2c348678be3755af2c1d9342b4e38f18e7e092068df8cdb60a0e00c3668600c9"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/sendmsg.c",
+      "patch": "38-sendmsg-validation.patch",
+      "before": "ad8078fb8ab300f5fc93ae813f6900e8dedde81e9e69fcfb7fdcb862844f000f",
+      "after": "046803bbc347b79e0e9a8288849f5b34b95a8c54d519727fb1829aca22da6bfe",
+      "patch_sha256": "9bcc74250ca2865fabdb1359bbef9e5cf3af3b2c43525e5421f88873d5d17fbc"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/network/recvmsg.c",
+      "patch": "39-recvmsg-bounds.patch",
+      "before": "a0f4d5e975c2ffa06cb8cb1a6cfb641c3b534e343ed25b20dc872a93f51dd5bb",
+      "after": "acd86db61bcda274aab2e9cbeb6ab4fb941b12cfebfb10463ff5e29dfe624d1e",
+      "patch_sha256": "8ae51bda72e2ea2b2581ced55a31488c9cd592c17ccb4b724ca2ee9b365e194b"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/NSOpenGL/NSOpenGLContext.m",
+      "patch": "40-context-framebuffer-window.patch",
+      "before": "6fa9f0b405af3ecc96cbd8d4d0f7c64f3e40c4ae265c6ab2041b2d3f201ae25d",
+      "after": "2912bee9ef462e13ad680135a5c8b9a21981a1d0a998151fe75856f96664078a",
+      "patch_sha256": "ce5d888229592b0c9f16327717a04231795f2129562378b5560ab62df7842f5f"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_cvwait.c",
+      "patch": "41-condition-wait-tracing.patch",
+      "before": "f4c9634d7f77c973ddda399cbe9cbd490434bb54595b96b049e99e91aab9c873",
+      "after": "0a37adc85840d58c5da360fb416bec455aaed10ad94d57d6e3d7b15cdfb5ad2c",
+      "patch_sha256": "01134546a29cad0caa96eb7f6a619aee7ff112dfec7b021ee9f0988ca873481d"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_cvbroad.c",
+      "patch": "42-psynch_cvbroad-error-abi.patch",
+      "before": "8873872dddd7e613656a25e73c17e636e42eb23a29e0a7036ef66adc8c77d08f",
+      "after": "d4d51e0f7d0336dd629b9e9ad416fb76f0bad4ce108a476988c19e07fef0b0e2",
+      "patch_sha256": "68c24309f5754b19117e4f60fe39b90bd1bcfb5cf8dcc6b4ae1952755f152227"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_cvclrprepost.c",
+      "patch": "43-psynch_cvclrprepost-error-abi.patch",
+      "before": "507b4fa5ea444c30ea3d03fd39e6ba6b60a321129c72b4acb94cc6b1150420a3",
+      "after": "900965f0c3bc4aa8f3da985afe6ac52d00f084bf6e9d1ed8c2fd63fefcf588e3",
+      "patch_sha256": "242f881b6b19e6f19cf9016cb1c9f5b86211b6187c95143ae2301c0d2ca2de7a"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_cvsignal.c",
+      "patch": "44-psynch_cvsignal-error-abi.patch",
+      "before": "94a0e6c72ffe4022bf7ed1e2d4a4bfb5f845db21067991c111ab34d411d325a9",
+      "after": "705c520c22d728c089a470728fe5e9ef6fd09eff73f846e4b9c0c2b8ef80e0d8",
+      "patch_sha256": "75c6a455f48faf8a99e418d31e242eb013f8ad93cf51814d708a77ef69e4904b"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_mutexdrop.c",
+      "patch": "45-psynch_mutexdrop-error-abi.patch",
+      "before": "4ac92bb75f71b379e646419ffbaf7701192b3787ca435ee6892d28d3748609d9",
+      "after": "76f3af34686637fb32614e57697fa573ed7c1d9c3eb19768cd45097df93511f6",
+      "patch_sha256": "b10c51d8c0bc9426e9c34a0ba868353ab0992f1b2cdfdd963b455aa9b901153f"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_mutexwait.c",
+      "patch": "46-psynch_mutexwait-error-abi.patch",
+      "before": "9ddfbed9d21c995e9bff0b639f4d4b0b8a5665de671a0cf610b59f67f1a6f53e",
+      "after": "14bb9b24379877cf6f721a8dd110079f67419aef7d5b8b37a3ec57383ebf29fc",
+      "patch_sha256": "11b694e370eb2fa1aeae38a97b4b55d4af3638f7eb4861d6c6e9ba39664acf16"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_rw_rdlock.c",
+      "patch": "47-psynch_rw_rdlock-error-abi.patch",
+      "before": "fcbbb14b5012536387ecf83cdc55bac2cd3e4355b10abe96386e4b4ed7c0ec33",
+      "after": "1f1fb9f261d2c4ec63f89daea228c7b7a2f9559762880cc7cb01f66740e16053",
+      "patch_sha256": "8254d8663839d3b744620a7d078418128df47731bda72af59e663a6cc49eddcf"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_rw_unlock.c",
+      "patch": "48-psynch_rw_unlock-error-abi.patch",
+      "before": "fca11cafdccb33f4ae59ea0482e6d9eb1c1002e3a2e0a5a98d9d6db196f6ebcd",
+      "after": "974a865e1175c6d8698143f66f91c93789b406b5db33a88f17f972d7faa3cb75",
+      "patch_sha256": "d6fc10bc928ec8a20f17682e35f5a04fdfc1a44ecead8d28e81028ee8c70dfbe"
+    },
+    {
+      "path": "src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/psynch/psynch_rw_wrlock.c",
+      "patch": "49-psynch_rw_wrlock-error-abi.patch",
+      "before": "71f2b8d3730a99067c0661401ab887745640ac14278bba930c87700fbb4705cd",
+      "after": "7ec928863a00277072f78f59eb0a51161562a1e53d8a8105e30d012e553215d6",
+      "patch_sha256": "1106f28f66a1784c8323a8e034da8f04686aa2d5202ba1109127eb524239d072"
+    },
+    {
+      "path": "src/external/xnu/gen/bsdsyscalls/SYS.h",
+      "patch": "50-ulock-generated-abi.patch",
+      "before": "cca1849f29f021b06f453871603d30b093fc55f0355395569826e799451e882d",
+      "after": "71516327c6a9a9703bf99046c71d582ec8aa7b844c6c0ea988eb491bb4933daf",
+      "patch_sha256": "b6075db2f70435c9221cf1f39e1af981a4d419abb79edc0291596fefe25f8e92"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/X11.backend/X11Window.m",
+      "patch": "51-x11-window-pixel-format.patch",
+      "before": "c7c8acbe0a89230cc2a034e5f49f40debcf3b5d45235c14193824772357cb371",
+      "after": "971da25e3f33890cc7778205648241a6ed410ad4525b0bce0ab8af464c9217b3",
+      "patch_sha256": "1f6b86be25b0983eb582402b0df3494b99e6655b01427b3d2cc8b26e1c26d9df"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/X11.backend/X11Window.h",
+      "patch": "52-native-visual-X11Window.patch",
+      "before": "4427821dfe6f10883cfca31a6a95f79625dbbf6851a8bbae45fd0b78c8c58b5b",
+      "after": "462c057e9c1d35cf0a8d7f09ec989796999fb9bfbc3e11082632d4448a4b60ce",
+      "patch_sha256": "cc07ebde0f51141b476e030c38c6842f63ea801749a6e233c50b4c3773390744"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/X11.backend/X11SubWindow.h",
+      "patch": "53-native-visual-X11SubWindow.patch",
+      "before": "cc2e56c7fd446c47e655d7ffb222477279832198b358916460334345f42a31fc",
+      "after": "01d95635baf734ebc68dee5024af215b0ccd9dec857bfcffe0be786aa58d5bbc",
+      "patch_sha256": "abc1861e9a72fe952740d74406d2b0a02aec0e8783a5b30049a974e04fd74f11"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/X11.backend/X11SubWindow.m",
+      "patch": "54-native-visual-X11SubWindow.patch",
+      "before": "da628332594e7b6111ec086688c12cbafe7d9fb95a60ee62d78fb5a2220f2df2",
+      "after": "b86e754348e406150861e8b5e3efd2e8ac9d843d2921d0843d0da3006047ff59",
+      "patch_sha256": "c23e87ff86cb17ee321701eaa2e46297c57018aed4a58443bf083cab456eee75"
+    },
+    {
+      "path": "src/external/cocotron/CoreGraphics/include/CoreGraphics/CGWindow.h",
+      "patch": "55-native-visual-CGWindow.patch",
+      "before": "6de49f3ca00315b55d5f351b32c13d780c6106a04f4877e705fa577fd73d8866",
+      "after": "389a9db07934df19622f7add95bba1d93b2476caf7fb42177e29992a6922a765",
+      "patch_sha256": "3774547ab96e088b35a3da2f9d64914711a4aea39cc6724fc05a6dde075ca5d7"
+    },
+    {
+      "path": "src/external/cocotron/CoreGraphics/CGWindow.m",
+      "patch": "56-native-visual-CGWindow.patch",
+      "before": "a9cbd75c0b379edb04d3df0f12012a7fd26bbcf266706066eef3757a7d01db51",
+      "after": "d08d5e389c1daa994eb76f6a25b3a9364fd7ab36980eef0e4c4a92c4706d33f5",
+      "patch_sha256": "c43507812b5c0f77995182a6b0ee494bd3e439fa0227c79604f92498c9fb375c"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/include/AppKit/NSWindow.h",
+      "patch": "57-native-visual-NSWindow.patch",
+      "before": "9ae3c91972040790d484b787dd2a8c6a7f2bb4d5e01e61c35bd1d64b755b666d",
+      "after": "d9f96115c1f847aa5559539fae95a2fd51462daddbb0da4de4fed3727e4d5cb1",
+      "patch_sha256": "236a9e8d3a44065abeecc0ce2f0ae37e0a1fe70aa19735ddfd768667929b9f90"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/NSWindow.m",
+      "patch": "58-native-visual-NSWindow.patch",
+      "before": "cb2442bdc6db580e1f99f7ccbed2c34efb1951fdd634278dbec8777307fde6ea",
+      "after": "a636ebd882c891b846a29cada10509b1f91fea12014af00f041fe57edfb01d39",
+      "patch_sha256": "414a5ca1a434d95ac422362e598d8f8395d504a5c8129a332305fcc6bc97f5da"
+    },
+    {
+      "path": "src/external/cocotron/AppKit/NSView.m",
+      "patch": "59-native-visual-NSView.patch",
+      "before": "309cd389308bf7e4187d71a95f18ec3a12aad5b4f8e3e39eb368f57109b03ef2",
+      "after": "2e4d8dae3501d904e94ed785d1e5be8c9362818881fe613f3fc6f04399f8e9c9",
+      "patch_sha256": "0ebef5adc3f9ff4bcba4c90b5fd184f662c1616ee069738b4f5b5c6d92bedac4"
     }
   ]
 }

@@ -1,0 +1,117 @@
+--- a/src/external/cocotron/AppKit/X11.backend/X11Window.m
++++ b/src/external/cocotron/AppKit/X11.backend/X11Window.m
+@@ -162,41 +162,25 @@
+     BOOL isPanel = [delegate isKindOfClass: [NSPanel class]];
+     if (isPanel && _styleMask & NSDocModalWindowMask)
+         _styleMask = NSBorderlessWindowMask;
+-    // TODO: get rid of these glX calls
+-    GLint att[] = {GLX_RGBA,
+-                   GLX_DOUBLEBUFFER,
+-                   GLX_RED_SIZE,
+-                   4,
+-                   GLX_GREEN_SIZE,
+-                   4,
+-                   GLX_BLUE_SIZE,
+-                   4,
+-                   GLX_DEPTH_SIZE,
+-                   4,
+-                   None};
+-
+-    int screen = DefaultScreen(_display);
+-
+-    if ((_visualInfo = glXChooseVisual(_display, screen, att)) == NULL) {
+-        NSLog(@"glXChooseVisual failed at %s %d", __FILE__, __LINE__);
+-    }
+-
+-    Colormap cmap =
+-            XCreateColormap(_display, RootWindow(_display, _visualInfo->screen),
+-                            _visualInfo->visual, AllocNone);
+-
+-    if (cmap < 0) {
+-        NSLog(@"XCreateColormap failed");
+-        [self release];
+-        return nil;
+-    }
++    /* Use the EGL format's X visual so context and window agree on every driver. */
++    CGLPixelFormatAttribute attributes[] = {kCGLPFAWindow, kCGLPFADoubleBuffer, kCGLPFADepthSize, 4, 0};
++    GLint screens;
++    CGLError error = CGLChoosePixelFormat(attributes, &_cglPixelFormat, &screens);
++    if (error != kCGLNoError) { [self release]; return nil; }
++    unsigned long visualID = CGLGetPixelFormatNativeVisualID(_cglPixelFormat);
++    int count = 0;
++    XVisualInfo desired = {.visualid = visualID};
++    _visualInfo = visualID ? XGetVisualInfo(_display, VisualIDMask, &desired, &count) : NULL;
++    if (!_visualInfo || !count) { [self release]; return nil; }
++    _colormap = XCreateColormap(_display, RootWindow(_display, _visualInfo->screen), _visualInfo->visual, AllocNone);
++    if (!_colormap) { [self release]; return nil; }
+ 
+     XSetWindowAttributes xattr;
+     unsigned long xattr_mask;
+     xattr.override_redirect =
+             _styleMask == NSBorderlessWindowMask ? True : False;
+     xattr_mask = CWOverrideRedirect | CWColormap;
+-    xattr.colormap = cmap;
++    xattr.colormap = _colormap;
+ 
+     _window = XCreateWindow(
+             _display, DefaultRootWindow(_display), _frame.origin.x,
+@@ -254,7 +238,7 @@
+         XNFocusWindow, _window,
+         NULL);
+ 
+-    _cglWindow = CGLGetWindow((void *) _window);
++    _cglWindow = NULL; /* Created with the matching context format when needed. */
+ 
+     [(X11Display *) [NSDisplay currentDisplay] setWindow: self forID: _window];
+ 
+@@ -403,6 +387,7 @@
+     _caContext = nil;
+ 
+     if (_cglContext != NULL) {
++        if (CGLGetCurrentContext() == _cglContext) CGLSetCurrentContext(NULL);
+         CGLReleaseContext(_cglContext);
+         _cglContext = NULL;
+     }
+@@ -419,6 +404,10 @@
+         XDestroyWindow(_display, _window);
+         _window = 0;
+     }
++    if (_cglPixelFormat) { CGLReleasePixelFormat(_cglPixelFormat); _cglPixelFormat = NULL; }
++    if (_colormap) { XFreeColormap(_display, _colormap); _colormap = 0; }
++    if (_visualInfo) { XFree(_visualInfo); _visualInfo = NULL; }
++
+ }
+ 
+ - (Window) windowHandle {
+@@ -593,8 +582,8 @@
+     if (_cglContext == NULL) {
+         CGLError error;
+ 
+-        if ((error = CGLCreateContext(NULL, NULL, &_cglContext)) !=
+-            kCGLNoError) {
++        error = CGLCreateContext(_cglPixelFormat, NULL, &_cglContext);
++        if (error != kCGLNoError) {
+             NSLog(@"CGLCreateContext failed at %s %d with error %d", __FILE__,
+                   __LINE__, error);
+ 
+@@ -602,6 +591,11 @@
+                         format: @"Failed to create GL context, CGL error %d",
+                                 error];
+         }
++        /* AppKit paints only when needed. Do not block its UI thread on
++         * occluded-window vblank; app-owned contexts keep their own policy. */
++        GLint interval = 0;
++        CGLSetParameter(_cglContext, kCGLCPSwapInterval, &interval);
++        _cglWindow = CGLGetWindowForContext(_cglContext, (void*)_window);
+         if ((error = CGLContextMakeCurrentAndAttachToWindow(
+                      _cglContext, _cglWindow)) != kCGLNoError)
+             NSLog(@"CGLContextMakeCurrentAndAttachToWindow failed with error "
+@@ -727,4 +721,8 @@
+                                                  frame: frame] autorelease];
+ }
+ 
++- (X11SubWindow *) createSubWindowWithFrame: (CGRect) frame visualID: (unsigned long) visualID {
++    return [[[X11SubWindow alloc] initWithParentWindow:self frame:frame visualID:visualID] autorelease];
++}
++
+ @end

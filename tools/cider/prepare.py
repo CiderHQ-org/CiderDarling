@@ -39,6 +39,9 @@ def patched_text(original, patch, reverse=False):
             marker, content = line[:1], line[1:]
             if marker not in (" ", "+", "-"):
                 raise ValueError("Unsupported unified diff line")
+            if index + 1 < len(lines) and lines[index + 1] == "\\ No newline at end of file\n":
+                content = content.removesuffix("\n")
+                index += 1
             if reverse and marker != " ":
                 marker = "+" if marker == "-" else "-"
             if marker in (" ", "-"):

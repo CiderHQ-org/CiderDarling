@@ -1,0 +1,13 @@
+--- a/src/external/cocotron/AppKit/NSOpenGL/NSOpenGLContext.m
++++ b/src/external/cocotron/AppKit/NSOpenGL/NSOpenGLContext.m
+@@ -135,8 +135,8 @@
+     if ([_view window] != nil)
+         rect = [_view convertRect: rect toView: nil];
+     if (_subwindow == nil) {
+-        _subwindow = [[[_view window] _createSubWindowWithFrame: rect] retain];
+-        _cglWindow = CGLGetWindow([_subwindow nativeWindow]);
++        _subwindow = [[[_view window] _createSubWindowWithFrame: rect visualID:CGLGetNativeVisualID(_glContext)] retain];
++        _cglWindow = CGLGetWindowForContext(_glContext, [_subwindow nativeWindow]);
+     } else {
+         [_subwindow setFrame: rect];
+     }

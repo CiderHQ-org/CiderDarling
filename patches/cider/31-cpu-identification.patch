@@ -1,0 +1,388 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_machdep.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_machdep.c
+@@ -1,7 +1,9 @@
+ #include <darling/emulation/xnu_syscall/bsd/helper/misc/sysctl_machdep.h>
+ 
+ #include <sys/errno.h>
+-#include <alloca.h>
++#include <stdint.h>
++#include <stddef.h>
++#include <darling/emulation/xnu_syscall/bsd/helper/misc/sysctl_hw.h>
+ 
+ #include <darling/emulation/common/simple.h>
+ #include <darling/emulation/conversion/fcntl/open.h>
+@@ -42,7 +44,7 @@
+     { .oid = _CPU_FAMILY, .type = CTLTYPE_INT, .exttype = "I", .name = "family", .handler = handle_family },
+ 		{ .oid = _CPU_MODEL, .type = CTLTYPE_INT, .exttype = "I", .name = "model", .handler = handle_model },
+ 		{ .oid = _CPU_STEPPING, .type = CTLTYPE_INT, .exttype = "I", .name = "stepping", .handler = handle_stepping },
+-		{ .oid = _CPU_BRAND_STRING, .type = CTLTYPE_STRING, .exttype = "S", .name = "vendor", .handler = handle_brand_string },
++		{ .oid = _CPU_BRAND_STRING, .type = CTLTYPE_STRING, .exttype = "S", .name = "brand_string", .handler = handle_brand_string },
+ 		{ .oid = _CPU_FEATURES, .type = CTLTYPE_STRING, .exttype = "S", .name = "features", .handler = handle_features },
+ 		{ .oid = _CPU_CORE_COUNT, .type = CTLTYPE_INT, .exttype = "I", .name = "core_count", .handler = handle_core_count },
+ 	{ .oid = -1 }
+@@ -53,269 +55,111 @@
+ 	{ .oid = -1 }
+ };
+ 
+-#ifndef __cpuid
+-#define __cpuid(level, a, b, c, d)			\
+-  __asm__ ("cpuid\n\t"					\
+-	   : "=a" (a), "=b" (b), "=c" (c), "=d" (d)	\
+-	   : "0" (level))
++
++/* Keep feature reporting usable on Intel, AMD and virtual CPUs. */
++#ifndef CIDER_CPUID
++static void cider_cpuid(uint32_t leaf, uint32_t subleaf, uint32_t out[4]) {
++    __asm__ volatile("cpuid" : "=a"(out[0]), "=b"(out[1]), "=c"(out[2]), "=d"(out[3])
++                     : "a"(leaf), "c"(subleaf));
++}
++#define CIDER_CPUID cider_cpuid
+ #endif
+-
+-#ifndef setup
+-#define setup(value)\
+-            unsigned int level = 0;     \
+-            unsigned int eax = value;   \
+-            unsigned int ebx;           \
+-            unsigned int edx;           \
+-            unsigned int ecx
++#ifndef CIDER_XCR0
++static uint64_t cider_xcr0(void) {
++    uint32_t low, high;
++    __asm__ volatile("xgetbv" : "=a"(low), "=d"(high) : "c"(0));
++    return ((uint64_t)high << 32) | low;
++}
++#define CIDER_XCR0 cider_xcr0
+ #endif
+-
+-
+-static inline void copyout_int(int value, char* to_copy, size_t* to_copy_length)
+-{
+-        char tmp[64];
+-        __simple_sprintf(tmp, "%d", value);
+-        copyout_string(tmp, to_copy, to_copy_length);
+-}
+-
+-
+-sysctl_handler(handle_vendor)
+-{
+-	unsigned int level = 0;
+-    unsigned int eax = 0;
+-	union
+-	{
+-		struct
+-		{
+-	    	unsigned int ebx;
+-		    unsigned int edx;
+-	    	unsigned int ecx;
+-		};
+-		char name[13];
+-	} v;
+-
+-    __cpuid(level, eax, v.ebx, v.ecx, v.edx);
+-
+-	v.name[12] = 0;
+-	copyout_string(v.name, (char*) old, oldlen);
+-
+-	return 0;
+-}
+-
+-sysctl_handler(handle_max_basic)
+-{
+-	setup(0);
+-
+-
+-    __cpuid(level, eax, ebx, ecx, edx);
+-
+-	copyout_int(eax, (char*)old,oldlen);
+-
+-	return 0;
+-}
+-
+-sysctl_handler(handle_family)
+-{
+-    setup(1);
+-
+-    __cpuid(level, eax, ebx, ecx, edx);
+-
+-    eax = eax >> 7;
+-    eax &= 15;
+-
+-    copyout_int(eax, old, oldlen);
+-
++static long cpu_integer(int value, void *old, unsigned long *oldlen) {
++    if (!oldlen) return -EFAULT;
++    if (old && *oldlen < sizeof(value)) { *oldlen = sizeof(value); return -ENOMEM; }
++    *oldlen = sizeof(value);
++    if (old) __builtin_memcpy(old, &value, sizeof(value));
+     return 0;
+ }
+-
+-sysctl_handler(handle_model)
+-{
+-    setup(1);
+-
+-    __cpuid(level, eax, ebx, ecx, edx);
+-
+-    eax = eax >> 3;
+-    eax &= 15;
+-
+-    copyout_int(eax,(char*)old, oldlen);
+-
++static long cpu_string(const char *value, void *old, unsigned long *oldlen) {
++    if (!oldlen) return -EFAULT;
++    unsigned long length = __simple_strlen(value) + 1;
++    if (old && *oldlen < length) { *oldlen = length; return -ENOMEM; }
++    if (old) __builtin_memcpy(old, value, length);
++    *oldlen = length;
+     return 0;
+ }
+-
+-sysctl_handler(handle_stepping)
+-{
+-    setup(1);
+-
+-    __cpuid(level, eax, ebx, ecx, edx);
+-
+-    eax &= 15;
+-
+-    copyout_int(eax,(char*)old, oldlen);
+-
+-    return 0;
++static void cpu_leaf1(uint32_t out[4]) {
++    uint32_t root[4]; CIDER_CPUID(0, 0, root);
++    out[0] = out[1] = out[2] = out[3] = 0;
++    if (root[0] >= 1) CIDER_CPUID(1, 0, out);
+ }
+-
+-sysctl_handler(handle_brand_string)
+-{
+-    setup(0x80000000);
+-
+-    __cpuid(level,eax,ebx, ecx, edx);
+-
+-    if (eax < 0x80000004) // the information is not implemented
+-        return 2;
+-
+-
+-
+-    union
+-    {
+-        unsigned int brand[12];
+-        char name[49];
+-    } v;
+-
+-		for (int i = 1; i < 4; i++)
+-		{
+-				eax = 0x80000000+i;
+-				__cpuid(level, eax, ebx, ecx, edx);
+-				v.brand[0x0+(i-1)*4] = eax;
+-				v.brand[0x1+(i-1)*4] = ebx;
+-				v.brand[0x2+(i-1)*4] = ecx;
+-				v.brand[0x3+(i-1)*4] = edx;
+-		}
+-
+-    v.name[48] = 0;
+-    copyout_string(v.name, (char*) old, oldlen);
+-
+-    return 0;
++sysctl_handler(handle_vendor) {
++    uint32_t leaf[4]; char text[13]; CIDER_CPUID(0, 0, leaf);
++    __builtin_memcpy(text, leaf + 1, 4);
++    __builtin_memcpy(text + 4, leaf + 3, 4);
++    __builtin_memcpy(text + 8, leaf + 2, 4); text[12] = 0;
++    return cpu_string(text, old, oldlen);
+ }
+-
+-sysctl_handler(handle_features)
+-{
+-
+-    setup(1);
+-
+-    static const char features[][7] = {"FPU","VME", "DE", "PSE", "TSC", "MSR", "PAE", "MCE", "CX8", "APIC", "","SEP","MTRR","PGE",
+-                        "MCA", "CMOV", "PAT", "PSE-36", "PSN", "CLFSH", "", "DS", "ACPI", "MMX", "FXSR", "SSE", "SSE2", "SS",
+-                        "HTT", "TM","IA64","PBE"};
+-
+-    __cpuid(0,eax,ebx,ecx,edx);
+-    int current_length = 0;
+-
+-    if (old != NULL)
+-    {
+-
+-        char *outsr = (char*)old;
+-
+-        for (int i = 0; i < 32; i++)
+-        {
+-            if (i == 10 || i == 20)
+-                continue;
+-
+-            if ( (edx & (1<<i)) && current_length < *oldlen)
+-            {
+-                if (current_length)
+-                {
+-                    outsr[current_length] = ' ';
+-
+-                    current_length++;
+-                }
+-                if (current_length < *oldlen)
+-                {
+-                    int len = __simple_strlen(features[i]);
+-                    
+-                    strncpy(outsr + current_length, features[i],
+-                    *oldlen - current_length);
+-
+-                    current_length += len;
+-                }
+-            }
+-        }
+-
+-        if (current_length < *oldlen)
+-        {
+-            outsr[current_length] = '\0';
+-        }
+-
++sysctl_handler(handle_max_basic) {
++    uint32_t leaf[4]; CIDER_CPUID(0, 0, leaf);
++    return cpu_integer(leaf[0], old, oldlen);
++}
++sysctl_handler(handle_family) {
++    uint32_t leaf[4]; cpu_leaf1(leaf);
++    int family = (leaf[0] >> 8) & 15;
++    if (family == 15) family += (leaf[0] >> 20) & 255;
++    return cpu_integer(family, old, oldlen);
++}
++sysctl_handler(handle_model) {
++    uint32_t leaf[4]; cpu_leaf1(leaf);
++    int family = (leaf[0] >> 8) & 15, model = (leaf[0] >> 4) & 15;
++    if (family == 6 || family == 15) model |= ((leaf[0] >> 16) & 15) << 4;
++    return cpu_integer(model, old, oldlen);
++}
++sysctl_handler(handle_stepping) {
++    uint32_t leaf[4]; cpu_leaf1(leaf);
++    return cpu_integer(leaf[0] & 15, old, oldlen);
++}
++sysctl_handler(handle_brand_string) {
++    uint32_t leaf[4]; char text[49]; CIDER_CPUID(0x80000000, 0, leaf);
++    if (leaf[0] < 0x80000004) return -ENOENT;
++    for (int i = 0; i < 3; i++) {
++        CIDER_CPUID(0x80000002 + i, 0, leaf);
++        __builtin_memcpy(text + i * 16, leaf, 16);
+     }
+-    else
+-    {
+-
+-        for (int i = 0; i < 32; i++)
+-        {
+-
+-            if (i == 10 || i == 20)
+-                continue;
+-
+-            if (edx & (1<<i)) 
+-            {
+-                if (current_length != 0)
+-                    current_length++;
+-                
+-                current_length += __simple_strlen(features[i]);
+-            }
+-
+-        }
+-
+-        if (oldlen)
+-            *oldlen = current_length;
+-
+-    }
+-        
+-
+-
+-    return 0;
+-
++    text[48] = 0;
++    return cpu_string(text, old, oldlen);
+ }
+-
+-
+-// TODO: i doubt core count is ever going to change.
+-//       this is something that could be cached if we had some way of doing something only once in libsystem_kernel (i.e. a simple version of dispatch_once).
++static void cpu_feature(char *text, size_t *used, const char *feature) {
++    if (*used) text[(*used)++] = ' ';
++    size_t length = __simple_strlen(feature);
++    __builtin_memcpy(text + *used, feature, length);
++    *used += length; text[*used] = 0;
++}
++sysctl_handler(handle_features) {
++    static const char *const edx_names[32] = {
++        "FPU","VME","DE","PSE","TSC","MSR","PAE","MCE","CX8","APIC",0,"SEP",
++        "MTRR","PGE","MCA","CMOV","PAT","PSE36","PSN","CLFSH",0,"DS","ACPI",
++        "MMX","FXSR","SSE","SSE2","SS","HTT","TM",0,"PBE"
++    };
++    static const char *const ecx_names[32] = {
++        "SSE3","PCLMULQDQ","DTES64","MON","DSCPL","VMX","SMX","EST","TM2",
++        "SSSE3","CID",0,"FMA","CX16","XTPR","PDCM",0,"PCID","DCA","SSE4.1",
++        "SSE4.2","X2APIC","MOVBE","POPCNT","TSCDEADLINE","AES","XSAVE",
++        "OSXSAVE","AVX1.0","F16C","RDRAND",0
++    };
++    uint32_t leaf[4]; cpu_leaf1(leaf);
++    /* AVX/FMA/F16C require OS-managed XMM and YMM state, not just CPUID. */
++    uint32_t avx_mask = (1U << 26) | (1U << 27) | (1U << 28);
++    int avx = (leaf[2] & avx_mask) == avx_mask && ((CIDER_XCR0() & 6) == 6);
++    if (!avx) leaf[2] &= ~((1U << 28) | (1U << 12) | (1U << 29));
++    char text[512] = {0}; size_t used = 0;
++    for (int i = 0; i < 32; i++)
++        if (edx_names[i] && (leaf[3] & (1U << i))) cpu_feature(text, &used, edx_names[i]);
++    for (int i = 0; i < 32; i++)
++        if (ecx_names[i] && (leaf[2] & (1U << i))) cpu_feature(text, &used, ecx_names[i]);
++    return cpu_string(text, old, oldlen);
++}
+ sysctl_handler(handle_core_count) {
+-	// it's easier to use /proc/cpuinfo for this.
+-	// using cpuid directly is more difficult because AMD processors don't use the same method as Intel processors.
+-
+-	int infofd = sys_open_nocancel("/proc/cpuinfo", BSD_O_RDONLY, 0);
+-	struct rdline_buffer rbuf;
+-	const char* line;
+-
+-	// a reasonable default
+-	size_t core_count = 1;
+-
+-	if (infofd < 0)
+-		goto out;
+-
+-	_readline_init(&rbuf);
+-
+-	while ((line = _readline(infofd, &rbuf)) != NULL) {
+-		if (strncmp(line, "cpu cores", 9) != 0) {
+-			continue;
+-		}
+-
+-		// great, we've got "cpu cores"
+-		// now find the actual number
+-		while (*line != ':' && *line != '\0')
+-			++line;
+-
+-		// shouldn't happen, but just in case
+-		if (*line == '\0')
+-			continue;
+-
+-		++line; // skip the colon
+-		if (*line == '\0')
+-			continue;
+-
+-		++line; // skip the space
+-		if (*line == '\0')
+-			continue;
+-
+-		core_count = __simple_atoi(line, NULL);
+-		break;
+-	}
+-
+-out:
+-	if (infofd >= 0)
+-		close_internal(infofd);
+-	if (old != NULL && oldlen && *oldlen >= sizeof(uint32_t))
+-		*(uint32_t*)old = core_count;
+-	if (oldlen)
+-		*oldlen = sizeof(uint32_t);
+-	return 0;
++    /* Use the same topology source as hw.physicalcpu, across all packages. */
++    return cpu_integer(cider_physical_cpus(), old, oldlen);
+ }

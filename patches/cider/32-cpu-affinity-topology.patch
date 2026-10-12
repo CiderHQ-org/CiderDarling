@@ -1,0 +1,195 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_hw.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/helper/misc/sysctl_hw.c
+@@ -1,5 +1,7 @@
+ #include <darling/emulation/xnu_syscall/bsd/helper/misc/sysctl_hw.h>
+ 
++#include <darling/emulation/linux_premigration/linux-syscalls/linux.h>
++#include <stdint.h>
+ #include <mach/host_info.h>
+ #include <mach/machine.h>
+ #include <mach/mach_init.h>
+@@ -26,6 +28,94 @@
+ 	_HW_64BITCAPABLE,
+ 	_HW_CPUFREQUENCY = 15,
+ };
++
++static const struct host_basic_info* gethostinfo(void);
++
++/* Linux returns the mask size, so count only bytes actually supplied. */
++static int cider_affinity(unsigned long mask[128]) {
++    __builtin_memset(mask, 0, 128 * sizeof(*mask));
++    long bytes = LINUX_SYSCALL(__NR_sched_getaffinity, 0, 128 * sizeof(*mask), mask);
++    if (bytes <= 0 || bytes > 128 * sizeof(*mask)) return 0;
++    int count = 0;
++    for (size_t i = 0; i < (size_t)bytes / sizeof(*mask); i++) count += __builtin_popcountl(mask[i]);
++    return count;
++}
++static int cider_read_host_file(const char* path, char* output, int size) {
++    long fd = LINUX_SYSCALL(__NR_openat, -100 /* AT_FDCWD */, path, 0 /* O_RDONLY */, 0);
++    if (fd < 0) return 0;
++    long length = LINUX_SYSCALL(__NR_read, fd, output, size - 1);
++    LINUX_SYSCALL(__NR_close, fd);
++    if (length < 0) return 0;
++    output[length] = 0; return 1;
++}
++static uint64_t cider_decimal(const char* value) {
++    uint64_t number = 0;
++    while (*value >= '0' && *value <= '9') {
++        if (number > UINT64_MAX / 10 - 9) return UINT64_MAX;
++        number = number * 10 + *value++ - '0';
++    }
++    return number;
++}
++static int cider_quota_cpus(int allowed) {
++    char membership[4096], directory[4096] = "/sys/fs/cgroup", file[4128], maximum[128];
++    if (cider_read_host_file("/proc/self/cgroup", membership, sizeof(membership))) {
++        char* line = membership;
++        while (*line) {
++            if (line[0] == '0' && line[1] == ':' && line[2] == ':') {
++                char* path = line + 3; size_t length = 0;
++                while (path[length] && path[length] != '\n') length++;
++                if (length < sizeof(directory) - 16) {
++                    __builtin_memcpy(directory + 14, path, length); directory[14 + length] = 0;
++                }
++                break;
++            }
++            while (*line && *line != '\n') line++;
++            if (*line) line++;
++        }
++    }
++    for (;;) {
++        __simple_sprintf(file, "%s/cpu.max", directory);
++        if (cider_read_host_file(file, maximum, sizeof(maximum)) && maximum[0] >= '0' && maximum[0] <= '9') {
++            const char* period = maximum; while (*period && *period != ' ') period++;
++            if (*period) {
++                uint64_t quota = cider_decimal(maximum), interval = cider_decimal(period + 1);
++                if (quota && interval) {
++                    uint64_t capacity = quota / interval + !!(quota % interval);
++                    if (capacity < (uint64_t)allowed) allowed = capacity ? (int)capacity : 1;
++                }
++            }
++        }
++        size_t length = __simple_strlen(directory);
++        while (length > 14 && directory[length - 1] != '/') length--;
++        if (length <= 14) break;
++        directory[length - 1] = 0;
++    }
++    /* Namespaced mounts may expose the current group directly at the root. */
++    return allowed;
++}
++int cider_available_cpus(void) {
++    unsigned long mask[128]; int count = cider_affinity(mask);
++    return cider_quota_cpus(count ? count : (gethostinfo()->avail_cpus > 0 ? gethostinfo()->avail_cpus : 1));
++}
++int cider_physical_cpus(void) {
++    unsigned long mask[128]; int allowed = cider_affinity(mask);
++    if (!allowed) return gethostinfo()->physical_cpu > 0 ? gethostinfo()->physical_cpu : 1;
++    int packages[8192], cores[8192], count = 0;
++    for (unsigned cpu = 0; cpu < 128 * sizeof(*mask) * 8; cpu++) {
++        if (!(mask[cpu / (sizeof(*mask) * 8)] & (1UL << (cpu % (sizeof(*mask) * 8))))) continue;
++        char path[128], value[32]; int package, core;
++        __simple_sprintf(path, "/sys/devices/system/cpu/cpu%u/topology/physical_package_id", cpu);
++        if (!cider_read_host_file(path, value, sizeof(value))) return allowed;
++        package = __simple_atoi(value, NULL);
++        __simple_sprintf(path, "/sys/devices/system/cpu/cpu%u/topology/core_id", cpu);
++        if (!cider_read_host_file(path, value, sizeof(value))) return allowed;
++        core = __simple_atoi(value, NULL);
++        int found = 0;
++        for (int i = 0; i < count; i++) if (packages[i] == package && cores[i] == core) { found = 1; break; }
++        if (!found) { packages[count] = package; cores[count++] = core; }
++    }
++    return count ? count : allowed;
++}
+ 
+ static sysctl_handler(handle_availcpu);
+ static sysctl_handler(handle_physicalcpu);
+@@ -42,6 +132,7 @@
+ static sysctl_handler(handle_cpufrequency);
+ 
+ const struct known_sysctl sysctls_hw[] = {
++    { .oid = HW_AVAILCPU, .type = CTLTYPE_INT, .exttype = "", .name = "activecpu", .handler = handle_availcpu },
+ 	{ .oid = HW_AVAILCPU, .type = CTLTYPE_INT, .exttype = "", .name = "availcpu", .handler = handle_availcpu },
+ 	{ .oid = HW_NCPU, .type = CTLTYPE_INT, .exttype = "", .name = "ncpu", .handler = handle_availcpu },
+ 	{ .oid = _HW_PHYSICAL_CPU, .type = CTLTYPE_INT, .exttype = "", .name = "physicalcpu", .handler = handle_physicalcpu },
+@@ -55,15 +146,18 @@
+ 	{ .oid = _HW_CPUTHREADTYPE, .type = CTLTYPE_INT, .exttype = "", .name = "cputhreadtype", .handler = handle_cputhreadtype },
+ 	{ .oid = _HW_64BITCAPABLE, .type = CTLTYPE_INT, .exttype = "", .name = "cpu64bit_capable", .handler = handle_cpu64bitcapable },
+ 	{ .oid = HW_MACHINE, .type = CTLTYPE_STRING, .exttype = "S", .name = "machine", .handler = handle_machine },
+-	{ .oid = _HW_CPUFREQUENCY, .type = CTLTYPE_INT, .exttype = "", .name = "cpufrequency", .handler = handle_cpufrequency },
++	{ .oid = _HW_CPUFREQUENCY, .type = CTLTYPE_QUAD, .exttype = "", .name = "cpufrequency", .handler = handle_cpufrequency },
+ 	{ .oid = -1 }
+ };
+ 
+ static const struct host_basic_info* gethostinfo(void)
+ {
+ 	static struct host_basic_info hinfo;
+-
+-	if (!hinfo.avail_cpus)
++	static int ready, lock;
++	while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE))
++		LINUX_SYSCALL(__NR_sched_yield);
++
++	if (!ready)
+ 	{
+ 		mach_msg_type_number_t hcount = HOST_BASIC_INFO_COUNT;
+ 		mach_port_t hself;
+@@ -71,22 +165,24 @@
+ 		hself = mach_host_self();
+ 		host_info(hself, HOST_BASIC_INFO, &hinfo, &hcount);
+ 		mach_port_deallocate(mach_task_self(), hself);
+-	}
+-
++		ready = 1;
++	}
++
++	__atomic_store_n(&lock, 0, __ATOMIC_RELEASE);
+ 	return &hinfo;
+ }
+ 
+ sysctl_handler(handle_availcpu)
+ {
+ 	sysctl_handle_size(sizeof(int));
+-	*((int*) old) = gethostinfo()->avail_cpus;
++	*((int*) old) = cider_available_cpus();
+ 	return 0;
+ }
+ 
+ sysctl_handler(handle_physicalcpu)
+ {
+ 	sysctl_handle_size(sizeof(int));
+-	*((int*) old) = gethostinfo()->physical_cpu;
++	*((int*) old) = cider_physical_cpus();
+ 	return 0;
+ }
+ 
+@@ -100,7 +196,8 @@
+ sysctl_handler(handle_logicalcpu)
+ {
+ 	sysctl_handle_size(sizeof(int));
+-	*((int*) old) = gethostinfo()->logical_cpu;
++	unsigned long mask[128]; int allowed = cider_affinity(mask);
++    *((int*) old) = allowed ? allowed : gethostinfo()->logical_cpu;
+ 	return 0;
+ }
+ 
+@@ -171,14 +268,12 @@
+ 
+ sysctl_handler(handle_cpufrequency)
+ {
+-	int freq = 2400000;
+-	char buf[16];
+-
+-	if (read_string("/sys/bus/cpu/devices/cpu0/cpufreq/cpuinfo_max_freq", buf, sizeof(buf)))
+-		freq = __simple_atoi(buf, NULL);
+-	*((int*) old) = freq;
+-	
+-	return 0;
++    sysctl_handle_size(sizeof(uint64_t));
++    char buf[32]; uint64_t freq = 0;
++    if (cider_read_host_file("/sys/bus/cpu/devices/cpu0/cpufreq/cpuinfo_max_freq", buf, sizeof(buf)))
++        freq = (uint64_t)__simple_atoi(buf, NULL) * 1000; /* Linux kHz -> Darwin Hz */
++    *((uint64_t*)old) = freq;
++    return 0;
+ }
+ 
+ sysctl_handler(handle_cpu64bitcapable)

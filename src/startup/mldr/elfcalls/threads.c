@@ -182,7 +182,11 @@ void* __darling_thread_create(unsigned long stack_size, unsigned long pth_obj_si
 
 	if (pthread_attr_init(&attr) != 0)
 		return (void*)(intptr_t)-22; // Darwin EINVAL
-	//pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	/* Darwin manages guest joins; native bootstrap threads must release their own TLS/stack. */
+	if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) != 0) {
+		pthread_attr_destroy(&attr);
+		return (void*)(intptr_t)-22;
+	}
 	// pthread_attr_setstacksize(&attr, stack_size);
 
 	// in some cases, we're already given a pthread object, stack, and guard page;
@@ -289,7 +293,7 @@ static void* darling_thread_entry(void* p)
 	{
 		// Terminate the Linux thread
 		munmap(t_freeaddr, t_freesize);
-		pthread_detach(pthread_self());
+		/* Native thread was detached at creation. */
 		return NULL;
 	}
 

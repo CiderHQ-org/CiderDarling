@@ -1,0 +1,47 @@
+--- a/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/kqueue/kevent_qos.c
++++ b/src/external/xnu/darling/src/libsystem_kernel/emulation/src/xnu_syscall/bsd/impl/kqueue/kevent_qos.c
+@@ -27,7 +27,7 @@
+ 	int rv;
+ 	struct kevent64_s* changelist64 = NULL;
+ 	struct kevent64_s* eventlist64 = NULL;
+-	struct wq_kevent_data wq_kevent;
++	struct wq_kevent_data wq_kevent = {0};
+ 	struct timespec polling_timeout = {};
+ 
+ 	if ((kq == -1) != !!(flags & KEVENT_FLAG_WORKQ))
+@@ -51,8 +51,8 @@
+ 		eventlist64 = (struct kevent64_s*) __builtin_alloca(nevents * sizeof(struct kevent64_s));
+ 	if (nevents == 0 && (flags & KEVENT_FLAG_WORKQ))
+ 	{
+-		eventlist = (struct kevent_qos_s*) __builtin_alloca(nevents * sizeof(struct kevent_qos_s));
+ 		nevents = 1;
++        eventlist = (struct kevent_qos_s*) __builtin_alloca(nevents * sizeof(struct kevent_qos_s));
+ 		eventlist64 = (struct kevent64_s*) __builtin_alloca(nevents * sizeof(struct kevent64_s));
+ 	}
+ 
+@@ -66,20 +66,22 @@
+ 			kevent_64_to_qos(&eventlist64[i], &eventlist[i]);
+ 	}
+ 
+-	if (flags & KEVENT_FLAG_WORKQ)
++	if ((flags & KEVENT_FLAG_WORKQ) && rv > 0)
+ 	{
+ 		// Pass to workqueue and wait
+ 		wq_kevent.sem = 0;
+ 		wq_kevent.events = eventlist;
+ 		wq_kevent.nevents = rv;
++        wq_kevent.capacity = nevents;
+ 
+-		sys_workq_kernreturn(WQOPS_QUEUE_REQTHREAD_FOR_KEVENT, &wq_kevent, 1, 0);
++		int request = sys_workq_kernreturn(WQOPS_QUEUE_REQTHREAD_FOR_KEVENT, &wq_kevent, 1, 0);
++        if (request < 0) return request;
+ 		
+ 		// __simple_printf("waiting for workq processing\n");
+ 		sem_down(&wq_kevent.sem, -1);
+ 
+ 		rv = wq_kevent.nevents;
+-		memmove(eventlist, wq_kevent.events, rv * sizeof(struct kevent_qos_s));
++		if (rv > 0) memmove(eventlist, wq_kevent.events, (size_t)rv * sizeof(struct kevent_qos_s));
+ 		// __simple_printf("workq done processing, returning %d to caller\n", rv);
+ 	}
+ 	

@@ -1,0 +1,11 @@
+--- a/src/external/cocotron/CoreGraphics/CGWindow.m
++++ b/src/external/cocotron/CoreGraphics/CGWindow.m
+@@ -203,4 +203,8 @@
+     return nil;
+ }
+ 
++- (CGSubWindow *) createSubWindowWithFrame: (CGRect) frame visualID: (unsigned long) visualID {
++    return [self createSubWindowWithFrame:frame];
++}
++
+ @end

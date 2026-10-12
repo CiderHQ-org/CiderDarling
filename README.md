@@ -10,6 +10,8 @@ portable string optimization, and modern compiler compatibility. Metal is an
 experimental opt-in; the default build uses the existing OpenGL path.
 
 See [the CiderDarling build, validation, and hardware roadmap](docs/CIDERDARLING.md).
+The [performance and hardware validation guide](docs/PERFORMANCE.md) covers
+adaptive threading, the second runtime batch, private staging, and timing reports.
 
 ```sh
 git clone https://github.com/CiderHQ-org/CiderDarling.git
