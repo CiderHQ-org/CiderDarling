@@ -17,6 +17,11 @@ if (TARGET_i386 OR TARGET_x86_64)
 	add_definitions(-Dmovsxw=movsw)
 endif ()
 
+# Recent Clang rewrites the sin/cos pair in __sincosf_stret and __sincos_stret
+# into a call to __sincos(f)_stret, i.e. to the function being defined, which
+# then recurses until the stack is exhausted (Roblox crashes at startup).
+set_source_files_properties(Source/sincos.c PROPERTIES COMPILE_OPTIONS "-fno-builtin")
+
 set(libm_sources
 	Source/abs.c
 	Source/sincos.c

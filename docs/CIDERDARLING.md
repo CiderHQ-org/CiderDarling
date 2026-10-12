@@ -38,6 +38,7 @@ cloning this fork under another organization preserves dependency resolution.
 | Strings | Compile portable string primitives with O2 and no builtin recursion | Actual sources checked for overlap, alignment, tails, comparison behavior and guarded-page reads |
 | Toolchains | Query supported constant-literal flags; replace incompatible empty literals; retain Objective-C debug-mode consistency; guard LLVM branch opcodes; avoid unsupported relative switch-table binds in libunwind | Full Clang 23 stock build with Metal off; Metal/other LLVM versions require builds |
 | Metal | Retain the supplied command queue correctly | Source repair; experimental backend remains opt-in |
+| libsystem_m | Compile `sincos.c` with `-fno-builtin` so Clang does not turn `__sincosf_stret`/`__sincos_stret` into calls to themselves (unbounded recursion; Roblox died with SIGSEGV at startup) | Disassembly of the rebuilt library; Roblox started under Zink and OpenGL, with and without MangoHud |
 
 `__ulock_wait2` does not implement shared/64-bit comparisons, absolute deadlines,
 or Darwin priority inheritance. Targeted ulock wakes retain the existing
