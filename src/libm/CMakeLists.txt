@@ -17,10 +17,12 @@ if (TARGET_i386 OR TARGET_x86_64)
 	add_definitions(-Dmovsxw=movsw)
 endif ()
 
-# Recent Clang rewrites the sin/cos pair in __sincosf_stret and __sincos_stret
-# into a call to __sincos(f)_stret, i.e. to the function being defined, which
-# then recurses until the stack is exhausted (Roblox crashes at startup).
-set_source_files_properties(Source/sincos.c PROPERTIES COMPILE_OPTIONS "-fno-builtin")
+# These are implementations of the builtins Clang uses to optimize sin/cos
+# and pow(10, x). Rewriting their bodies to those builtins calls the function
+# being defined: sincos overflows the stack, while __exp10 tail-calls itself
+# forever and freezes Roblox when entering an experience.
+set_source_files_properties(Source/sincos.c Source/exp10.c
+	PROPERTIES COMPILE_OPTIONS "-fno-builtin")
 
 set(libm_sources
 	Source/abs.c

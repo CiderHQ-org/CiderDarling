@@ -10,7 +10,10 @@
 #include <sys/time.h>
 #include <dispatch/dispatch.h>
 #include <mach/mach_time.h>
+#include <math.h>
 #include <unistd.h>
+extern double __exp10(double);
+extern float __exp10f(float);
 extern int __ulock_wait(uint32_t, void *, uint64_t, uint32_t);
 extern int __ulock_wait2(uint32_t, void *, uint64_t, uint64_t, uint64_t);
 extern int __ulock_wake(uint32_t, void *, uint64_t);
@@ -39,6 +42,14 @@ static void require(int valid, const char *description) {
 }
 int main(void) {
     alarm(30);
+    /* Volatile input keeps Clang from folding away the library calls. A
+     * broken builtin wrapper otherwise spins forever on the first call. */
+    volatile double decimal_exponent = 2.0;
+    volatile float single_exponent = -1.0f;
+    require(fabs(__exp10(decimal_exponent) - 100.0) < 1e-12,
+            "double exp10 returns instead of recursively calling itself");
+    require(fabsf(__exp10f(single_exponent) - 0.1f) < 1e-6f,
+            "float exp10 returns and rounds its power result");
     int active = 0, family = 0; size_t integer_size = sizeof(int);
     require(!sysctlbyname("hw.activecpu", &active, &integer_size, NULL, 0) && active > 0 && integer_size == sizeof(int), "libdispatch active CPU count");
     integer_size = sizeof(int);

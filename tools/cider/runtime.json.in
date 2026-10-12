@@ -21,6 +21,6 @@
     "bounded_numeric_timing_traces", "safe_private_runtime_staging",
     "cgl_native_visual_matching", "x11_colormap_lifetime", "cgl_context_swap_interval",
     "workqueue_deferred_requests", "pthread_cancel_query_local", "sigexc_trace_opt_in",
-    "cpu_counts_cached", "loader_bootstrap_stack_headroom"
+    "cpu_counts_cached", "loader_bootstrap_stack_headroom", "libm_builtin_recursion"
   ]
 }
