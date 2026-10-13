@@ -13,19 +13,34 @@ def main():
     parser.add_argument("--directory", required=True, type=Path)
     parser.add_argument("--fixtures", nargs="+", required=True, type=Path)
     parser.add_argument("--egl-vendor", type=Path)
+    parser.add_argument("--release-mount", type=Path,
+                        help="Bind a staged binary at its compiled /opt prefix inside this namespace only")
     args = parser.parse_args()
     if os.getpid() != 1 or os.getuid() != 0: parser.error("Run through isolate.py in a private namespace")
     mapping = Path("/proc/self/uid_map").read_text().split()
     if len(mapping) != 3 or mapping[0] != "0" or mapping[2] != "1" or mapping[1] == "0":
         parser.error("Expected one unprivileged host-user mapping")
+    runtime = args.runtime.resolve()
+    if args.release_mount:
+        import re
+        target = args.release_mount
+        if not re.fullmatch(r'/opt/ciderdarling/[0-9a-f]{40}', str(target)):
+            parser.error("Invalid binary release prefix")
+        # /opt is hidden in this private mount namespace. No host installation
+        # directory is created, changed or shut down by a binary smoke test.
+        subprocess.run(['mount', '--make-rprivate', '/'], check=True)
+        subprocess.run(['mount', '-t', 'tmpfs', 'tmpfs', '/opt'], check=True)
+        target.mkdir(parents=True)
+        subprocess.run(['mount', '--bind', str(runtime), str(target)], check=True)
+        runtime = target
     directory = args.directory.resolve()
     # AF_UNIX socket names include the prefix; keep their path below 108 bytes.
     prefix = directory.parents[2] / ("p-" + directory.name)
     if prefix.exists(): parser.error("Fixture prefixes must be fresh")
-    client = args.runtime.resolve() / "bin/darling"
+    client = runtime / "bin/darling"
     environment = dict(os.environ, DPREFIX=str(prefix), DARLING_NOOVERLAYFS="1")
     environment["PATH"] = str(client.parent) + os.pathsep + environment.get("PATH", "")
-    environment["LD_LIBRARY_PATH"] = str(args.runtime / "libexec/darling") + os.pathsep + str(args.runtime / "lib")
+    environment["LD_LIBRARY_PATH"] = str(runtime / "libexec/darling") + os.pathsep + str(runtime / "lib")
     for key in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"):
         environment.pop(key, None)
     if args.egl_vendor: environment["__EGL_VENDOR_LIBRARY_FILENAMES"] = str(args.egl_vendor)

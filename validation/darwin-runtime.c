@@ -50,6 +50,11 @@ int main(void) {
             "double exp10 returns instead of recursively calling itself");
     require(fabsf(__exp10f(single_exponent) - 0.1f) < 1e-6f,
             "float exp10 returns and rounds its power result");
+    volatile float angle = 0.5f;
+    struct __float2 components = __sincosf_stret(angle);
+    require(fabsf(components.__sinval - sinf(angle)) < 1e-6f
+            && fabsf(components.__cosval - cosf(angle)) < 1e-6f,
+            "sincos returns both components without builtin recursion");
     int active = 0, family = 0; size_t integer_size = sizeof(int);
     require(!sysctlbyname("hw.activecpu", &active, &integer_size, NULL, 0) && active > 0 && integer_size == sizeof(int), "libdispatch active CPU count");
     integer_size = sizeof(int);

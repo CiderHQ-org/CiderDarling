@@ -87,6 +87,19 @@ def build_feed(revision, manifests, assets, source_date, supersedes):
             'supersedes': supersedes, 'builds': builds}
 
 
+def validate_smoke(report, revision, flavor, digest):
+    if (not isinstance(report, dict) or report.get('schema_version') != 1
+            or report.get('source_revision') != revision or report.get('flavor') != flavor
+            or report.get('archive_sha256') != digest or report.get('passed') is not True
+            or report.get('coverage') != ['math', 'threading', 'network', 'kqueue', 'appkit', 'cgl']):
+        raise ValueError(f'{flavor} binary smoke gate did not pass for this archive')
+    results = report.get('results')
+    if (not isinstance(results, list) or len(results) != 2
+            or {item.get('fixture') for item in results} != {'darwin-runtime', 'darwin-graphics'}
+            or any(item.get('returncode') != 0 or item.get('error') for item in results)):
+        raise ValueError(f'{flavor} binary smoke results are incomplete')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('revision')
@@ -124,6 +137,11 @@ def main():
             data = json.loads(raw)
             if checksum != [data.get('archive_sha256'), stem + '.tar.xz']:
                 raise ValueError('Archive checksum and manifest disagree')
+            smoke = f'runtime-smoke-{flavor}.json'
+            if smoke not in assets:
+                raise ValueError(f'The release is missing {smoke}')
+            validate_smoke(json.loads(download(tag, smoke, work).read_bytes()),
+                           revision, flavor, data['archive_sha256'])
             manifests[flavor] = raw
         feed = build_feed(revision, manifests, assets, int(git('show', '-s', '--format=%ct', revision)),
                           git('rev-list', '--max-count=129', revision).splitlines()[1:])

@@ -33,6 +33,9 @@ print(f"| {m['flavor']} | `{m['archive']}` ({m['archive_bytes'] / 1048576:.0f} M
 PY
   done
   echo
+  echo 'Release gates passed: Clang/GCC source regressions and exact-archive Mach-O math, threading, networking, AppKit and CGL smoke tests on both distro builds.'
+  echo 'Graphics CI uses software Mesa under Xvfb; actual GPU gameplay needs hardware testing.'
+  echo
   echo "Each archive unpacks to \`/opt/ciderdarling/$revision\`, where Cider finds it:"
   echo
   echo '```sh'

@@ -130,6 +130,14 @@ distribution family and the manifest lists those libraries
 
 ### Continuous builds
 
+Binary publication now requires Clang and GCC source regressions and tests of
+each exact packaged archive in a disposable user/mount/PID namespace. Those
+tests cover builtin math recursion, CPU reporting, pthread/libdispatch work,
+condition variables, ulocks, datagrams, kqueue, AppKit events, and CGL window
+resize/presentation/destruction. Xvfb and software Mesa provide repeatable CI
+graphics; this does not certify NVIDIA, AMD or Intel gameplay. The publisher
+checks each archive's matching `runtime-smoke-<flavor>.json` before promotion.
+
 Successful binary builds also trigger `ciderdarling-updates.yml`. Its publisher
 checks both distribution archives, their manifests and checksums, then writes
 an immutable `ciderdarling-update.json` asset on the binary release and updates

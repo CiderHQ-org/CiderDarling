@@ -53,6 +53,22 @@ class PublishedRuntimeTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.feed()
 
+    def test_binary_gate_rejects_failed_missing_or_different_archive_results(self):
+        report = {'schema_version': 1, 'source_revision': self.revision, 'flavor': 'arch',
+                  'archive_sha256': 'b' * 64, 'passed': True,
+                  'coverage': ['math', 'threading', 'network', 'kqueue', 'appkit', 'cgl'],
+                  'results': [{'fixture': 'darwin-runtime', 'returncode': 0},
+                              {'fixture': 'darwin-graphics', 'returncode': 0}]}
+        publisher.validate_smoke(report, self.revision, 'arch', 'b' * 64)
+        for field, value in [('passed', False), ('archive_sha256', 'c' * 64),
+                             ('flavor', 'ubuntu24.04'), ('coverage', ['math']),
+                             ('results', [{'fixture': 'darwin-runtime', 'returncode': 0}]),
+                             ('results', [{'fixture': 'darwin-runtime', 'returncode': 0},
+                                          {'fixture': 'darwin-graphics', 'returncode': 1}])]:
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError):
+                    publisher.validate_smoke(dict(report, **{field: value}), self.revision, 'arch', 'b' * 64)
+
 
 if __name__ == '__main__':
     unittest.main()

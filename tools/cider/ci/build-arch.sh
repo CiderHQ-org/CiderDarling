@@ -9,7 +9,8 @@ pacman -Syu --noconfirm --needed \
   cmake ninja clang llvm flex bison icu git python pkgconf xz ccache binutils \
   fontconfig freetype2 cairo libtiff giflib libjpeg-turbo libpng mesa glu libglvnd \
   libbsd libelf libxml2 libcap dbus libpulse ffmpeg fuse2 \
-  libx11 libxext libxkbfile libxcursor libxkbcommon libxrandr vulkan-headers vulkan-icd-loader
+  libx11 libxext libxkbfile libxcursor libxkbcommon libxrandr vulkan-headers vulkan-icd-loader \
+  xorg-server-xvfb xorg-xauth
 git config --global --add safe.directory '*'
 
 export CCACHE_DIR=/ccache CCACHE_BASEDIR=/src CCACHE_MAXSIZE=4G CCACHE_COMPILERCHECK=content
@@ -37,4 +38,6 @@ mv -- "$recipe/.SRCINFO" dist/ciderdarling-bin.SRCINFO
 mv -- "$recipe/ciderdarling-bin.install" dist/ciderdarling-bin.install
 mv -- "$package" dist/
 rm -rf -- "$recipe"
+chown -R builder: dist
+su builder -c 'cd /src && LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a python3 validation/binary-smoke.py --manifest "$(ls dist/ciderdarling-*-x86_64-arch.json)" --output dist/runtime-smoke-arch.json'
 chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist /ccache

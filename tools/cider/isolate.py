@@ -67,7 +67,7 @@ def compile_fixture(runtime, source, output):
     run(command)
 
 
-def namespace_run(runtime, directory, vendor):
+def namespace_run(runtime, directory, vendor, release_mount=None):
     metadata = runtime / "libexec/darling/usr/share/ciderdarling/runtime.json"
     data = json.loads(metadata.read_text())
     if data.get("name") != "CiderDarling": raise ValueError("Selected runtime lacks CiderDarling metadata")
@@ -80,6 +80,8 @@ def namespace_run(runtime, directory, vendor):
     command = ["unshare", "--user", "--map-root-user", "--mount", "--pid", "--fork", "--kill-child", "--mount-proc",
                sys.executable, ROOT / "tools/cider/prefix-exec.py", "--runtime", runtime,
                "--directory", directory, "--fixtures", *fixtures]
+    if release_mount:
+        command += ["--release-mount", release_mount]
     if vendor: command += ["--egl-vendor", vendor]
     environment = dict(os.environ)
     for key in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH", "DPREFIX"):

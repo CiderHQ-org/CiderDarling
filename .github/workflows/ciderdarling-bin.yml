@@ -34,6 +34,27 @@ env:
   GIT_LFS_SKIP_SMUDGE: "1"
 
 jobs:
+  source-fixtures:
+    name: Source regressions (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch fixture dependencies
+        run: |
+          git submodule update --init --depth 1 src/external/libkqueue src/external/xnu src/external/cocotron src/external/libpthread src/external/libplatform src/external/metal src/external/objc4 src/external/cfnetwork src/external/iokitd src/external/security src/external/libunwind
+          git -C src/external/metal submodule update --init --depth 1 deps/indium
+      - name: Run source regressions
+        env:
+          CC: ${{ matrix.compiler }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang gcc python3 libegl1-mesa-dev libgl-dev
+          python3 tools/cider/prepare.py
+          python3 validation/run.py
   build:
     name: Build (${{ matrix.flavor }})
     runs-on: ubuntu-24.04
@@ -68,7 +89,8 @@ jobs:
         if: matrix.flavor == 'arch'
         run: |
           mkdir -p "$RUNNER_TEMP/ccache"
-          docker run --rm -v "$GITHUB_WORKSPACE:/src" -v "$RUNNER_TEMP/ccache:/ccache" \
+          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+            -v "$GITHUB_WORKSPACE:/src" -v "$RUNNER_TEMP/ccache:/ccache" \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e GIT_LFS_SKIP_SMUDGE=1 \
             archlinux:base-devel bash /src/tools/cider/ci/build-arch.sh
 
@@ -88,7 +110,7 @@ jobs:
 
   release:
     name: Publish the release
-    needs: build
+    needs: [build, source-fixtures]
     if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-24.04
     permissions:
