@@ -2,7 +2,7 @@
 
 CiderDarling targets x86_64 Linux and is hosted independently at
 https://github.com/CiderHQ-org/CiderDarling. This batch extends the foundation
-to 59 dependency file patches, with normal root-repository changes alongside
+to 61 dependency file patches, with normal root-repository changes alongside
 them. Upstream pins and licenses are retained.
 
 ## Implemented areas
@@ -28,10 +28,12 @@ and audits each dependency edit against its pinned original and recorded patch.
 ## Threading and resource policy
 
 Applications and libdispatch can use every available logical CPU. The workqueue
-resource ceiling is `max(64, 4 * effective_cpu_capacity)`, capped at 16,384 workers.
+soft worker limit is `max(64, 4 * effective_cpu_capacity)`, capped at 16,384 workers.
 This leaves room for blocked workers while CPU capacity remains governed by
 affinity and cgroup quotas. It does not force that many CPU-bound workers to run.
-Saturation returns EAGAIN instead of blocking the requesting worker indefinitely.
+Requests beyond that soft limit are deferred for returning workers, because
+libdispatch does not retry a refused request. Overcommit/kevent work can grow
+to `max(512, soft_limit)` workers; thread-creation failures release their slot.
 Idle parked workers retain the existing 15-second retirement policy, with fixed
 timeout/token handling. The application controls how much work it submits.
 
@@ -115,6 +117,10 @@ URLs, credentials or shader contents are recorded. Tracing is disabled by defaul
 The profiler reports API-duration tails and per-context presentation intervals,
 which are not GPU execution times or full gameplay frame times. Scheduler sampling
 reads numeric `/proc` data only for the explicitly selected process.
+It also reports the largest intervals of 100 ms or more for each presentation
+context. Interleaved contexts do not create false gaps. A gap can include
+intentional idle time, menu transitions or throttling; correlate it with the
+session lifecycle and scheduler samples before calling it a rendering stall.
 
 Installed helpers are `ciderdarling-doctor`, `ciderdarling-profile` and
 `ciderdarling-hardware-matrix`. Real-device checks still need gameplay start/join/

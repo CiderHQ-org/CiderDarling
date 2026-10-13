@@ -88,6 +88,9 @@ jobs:
       - name: Build in Arch Linux
         if: matrix.flavor == 'arch'
         run: |
+          # The host restriction applies to nested user namespaces too.
+          # This affects only this disposable CI VM, never installed systems.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           mkdir -p "$RUNNER_TEMP/ccache"
           docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
             -v "$GITHUB_WORKSPACE:/src" -v "$RUNNER_TEMP/ccache:/ccache" \
