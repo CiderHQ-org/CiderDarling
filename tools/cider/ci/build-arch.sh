@@ -6,7 +6,7 @@ set -euo pipefail
 cd /src
 
 pacman -Syu --noconfirm --needed \
-  cmake ninja clang llvm flex bison icu git python pkgconf xz ccache binutils \
+  cmake ninja clang llvm lld flex bison icu git python pkgconf xz ccache binutils \
   fontconfig freetype2 cairo libtiff giflib libjpeg-turbo libpng mesa glu libglvnd \
   libbsd libelf libxml2 libcap dbus libpulse ffmpeg fuse2 \
   libx11 libxext libxkbfile libxcursor libxkbcommon libxrandr vulkan-headers vulkan-icd-loader \
@@ -39,5 +39,5 @@ mv -- "$recipe/ciderdarling-bin.install" dist/ciderdarling-bin.install
 mv -- "$package" dist/
 rm -rf -- "$recipe"
 chown -R builder: dist
-su builder -c 'cd /src && LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a python3 validation/binary-smoke.py --manifest "$(ls dist/ciderdarling-*-x86_64-arch.json)" --output dist/runtime-smoke-arch.json'
+su builder -c 'cd /src && LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a --server-args="-screen 0 1280x1024x24 -nolisten tcp -ac" python3 validation/binary-smoke.py --manifest "$(ls dist/ciderdarling-*-x86_64-arch.json)" --output dist/runtime-smoke-arch.json'
 chown -R "${HOST_UID:-0}:${HOST_GID:-0}" dist /ccache

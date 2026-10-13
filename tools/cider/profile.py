@@ -34,12 +34,17 @@ def summarize(path):
                 timings[category].append(record["duration_ns"])
                 if category == "cgl_present": presents[(record["pid"], record["value"])].append(record["timestamp_ns"])
             except (ValueError, KeyError, TypeError): rejected += 1
-    intervals = []
-    for values in presents.values():
+    intervals, gaps = [], []
+    for (pid, context), values in presents.items():
         values.sort()
         intervals.extend(second - first for first, second in zip(values, values[1:]))
+        gaps.extend({'pid': pid, 'context': context, 'timestamp_ns': second,
+                     'interval_ns': second - first}
+                    for first, second in zip(values, values[1:]) if second - first >= 100000000)
     return {"schema_version": 1, "categories": {key: percentiles(value) for key, value in timings.items()},
             "presentation_intervals": percentiles(intervals), "rejected_records": rejected,
+            "long_presentation_gaps": {'threshold_ns': 100000000, 'count': len(gaps),
+                                       'largest': sorted(gaps, key=lambda item: item['interval_ns'], reverse=True)[:20]},
             "measurement": "API call durations and per-context presentation intervals; not GPU execution time"}
 
 

@@ -18,6 +18,6 @@ ccache --show-stats
 # Ubuntu's runner image restricts user namespaces through AppArmor. This
 # change is confined to the disposable CI VM; tests still map one build user.
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a python3 validation/binary-smoke.py \
+LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a --server-args='-screen 0 1280x1024x24 -nolisten tcp -ac' python3 validation/binary-smoke.py \
   --manifest "$(ls dist/ciderdarling-*-x86_64-ubuntu24.04.json)" \
   --output dist/runtime-smoke-ubuntu24.04.json
