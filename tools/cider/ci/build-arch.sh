@@ -12,6 +12,9 @@ pacman -Syu --noconfirm --needed \
   libx11 libxext libxkbfile libxcursor libxkbcommon libxrandr vulkan-headers vulkan-icd-loader \
   xorg-server-xvfb xorg-xauth
 git config --global --add safe.directory '*'
+id builder >/dev/null 2>&1 || useradd -m builder
+# Fail on a CI container setup problem before spending time on the full build.
+su builder -c 'unshare --user --map-root-user --mount --pid --fork --kill-child --mount-proc true'
 
 export CCACHE_DIR=/ccache CCACHE_BASEDIR=/src CCACHE_MAXSIZE=4G CCACHE_COMPILERCHECK=content
 export CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -25,7 +28,6 @@ archive=dist/$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["
 recipe=dist/aur
 python3 tools/cider/aur-package.py --manifest "$manifest" --output "$recipe" --resolve-depends
 cp -- "$archive" "$recipe/"
-id builder >/dev/null 2>&1 || useradd -m builder
 chown -R builder: "$recipe"
 su builder -c "cd '$recipe' && makepkg --printsrcinfo > .SRCINFO && makepkg -f --nodeps --noconfirm"
 package=$(ls "$recipe"/ciderdarling-bin-*.pkg.tar.zst)

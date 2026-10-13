@@ -93,6 +93,7 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           mkdir -p "$RUNNER_TEMP/ccache"
           docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+            --security-opt systempaths=unconfined \
             -v "$GITHUB_WORKSPACE:/src" -v "$RUNNER_TEMP/ccache:/ccache" \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" -e GIT_LFS_SKIP_SMUDGE=1 \
             archlinux:base-devel bash /src/tools/cider/ci/build-arch.sh
